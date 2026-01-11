@@ -40,12 +40,13 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapRef.current);
     
-            const blueIcon = L.icon({
-                iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-            });
+    const blueIcon = L.icon({
+        iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
+        iconSize: [40, 60],
+        iconAnchor: [20, 60],
+        popupAnchor: [1, -34],
+        className: 'marker-pulse'
+    });
     
     setIsReady(true);
 
@@ -59,12 +60,13 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     if (!mapRef.current || !currentPoint || !L) return;
 
     if (!markerRef.current) {
-                const blueIcon = L.icon({
-                    iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34],
-                });
+        const blueIcon = L.icon({
+            iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
+            iconSize: [40, 60],
+            iconAnchor: [20, 60],
+            popupAnchor: [1, -34],
+            className: 'marker-pulse'
+        });
                 markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);

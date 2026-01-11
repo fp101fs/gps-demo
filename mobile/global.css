@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes pulse-red {
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: sepia(100%) saturate(600%) hue-rotate(-25deg) brightness(90%);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.marker-pulse {
+  animation: pulse-red 2s infinite ease-in-out;
+}
