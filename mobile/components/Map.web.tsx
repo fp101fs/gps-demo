@@ -39,14 +39,11 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapRef.current);
     
-    const iconRetinaUrl = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png';
-    const iconUrl = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png';
-    const shadowUrl = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png';
-
-    L.Icon.Default.mergeOptions({
-        iconRetinaUrl,
-        iconUrl,
-        shadowUrl,
+    const blueIcon = L.icon({
+        iconUrl: '/assets/images/marker-blue.svg',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
     });
 
     setIsReady(true);
@@ -61,7 +58,13 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     if (!mapRef.current || !currentPoint || !L) return;
 
     if (!markerRef.current) {
-      markerRef.current = L.marker([currentPoint.lat, currentPoint.lng]).addTo(mapRef.current);
+        const blueIcon = L.icon({
+            iconUrl: '/assets/images/marker-blue.svg',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+        });
+        markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
     }
