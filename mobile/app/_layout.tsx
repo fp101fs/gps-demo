@@ -1,14 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useSegments, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { ClerkProvider, SignedIn, SignedOut, useOAuth } from '@clerk/clerk-expo';
+import { ClerkProvider, SignedIn, SignedOut, useOAuth, useAuth } from '@clerk/clerk-expo';
 import { Text, View, SafeAreaView } from 'react-native';
 import { Button } from '@/components/ui/Button'; 
-import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { useColorScheme } from 'nativewind';
 import * as WebBrowser from 'expo-web-browser';
@@ -18,7 +17,6 @@ import '../global.css';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Token cache for Native (persists login)
 const tokenCache = {
   async getToken(key: string) {
     try {
@@ -36,7 +34,6 @@ const tokenCache = {
   },
 };
 
-// Use the key from environment
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
 if (!publishableKey) {
@@ -73,8 +70,12 @@ function SignInScreen() {
     )
 }
 
-export default function RootLayout() {
+function InitialLayout() {
   const { colorScheme } = useColorScheme();
+  const { isLoaded, isSignedIn } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -85,24 +86,50 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const inAuthGroup = segments[0] === '(tabs)';
+    const isPublicRoute = segments[0] === 'track';
+
+    if (!isSignedIn && !isPublicRoute && inAuthGroup) {
+      // If the user is not signed in and the initial segment is not a public route, redirect to sign-in
+      // (This is handled by SignedIn/SignedOut wrappers below, but segments check is good for deep linking)
+    }
+  }, [isSignedIn, segments, isLoaded]);
+
+  if (!loaded || !isLoaded) {
     return null;
   }
 
   return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="track/[id]" options={{ title: 'Shared Journey' }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      
+      {/* Auth Gate for Tab routes */}
+      {segments[0] === '(tabs)' && (
+        <>
+          <SignedOut>
+            <View className="absolute inset-0 bg-white">
+               <SignInScreen />
+            </View>
+          </SignedOut>
+        </>
+      )}
+
+      <StatusBar style="auto" />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <SignedIn>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-        </SignedIn>
-        <SignedOut>
-          <SignInScreen />
-        </SignedOut>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <InitialLayout />
     </ClerkProvider>
   );
 }

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -164,6 +166,33 @@ export default function HomeScreen() {
     return `${mins}m ${secs}s`;
   };
 
+  const shareJourney = async () => {
+    if (!trackId) return;
+    
+    // Create a shareable link. 
+    // On web, it's easy. On native, we use the scheme.
+    const baseUrl = Platform.OS === 'web' 
+        ? window.location.origin 
+        : Linking.createURL('/');
+    
+    const shareUrl = `${baseUrl}/track/${trackId}`;
+    
+    await Clipboard.setStringAsync(shareUrl);
+    
+    if (Platform.OS === 'web') {
+        Alert.alert('Link Copied', 'Share this link with others to view your live journey!');
+    } else {
+        try {
+            await Share.share({
+                message: `Follow my live journey: ${shareUrl}`,
+                url: shareUrl,
+            });
+        } catch (error) {
+            console.log(error);
+        }
+    }
+  };
+
   return (
     <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
@@ -176,11 +205,18 @@ export default function HomeScreen() {
                {isTracking ? '🟢 Tracking Active' : 'Ready to start'}
             </Text>
           </View>
-          {user && (
-             <Button variant="ghost" size="sm" onPress={() => signOut()}>
-                <Text className="text-blue-600">Sign Out</Text>
-             </Button>
-          )}
+          <View className="flex-row gap-2">
+            {isTracking && (
+                <Button variant="outline" size="sm" onPress={shareJourney}>
+                    <Text className="text-blue-600">Share</Text>
+                </Button>
+            )}
+            {user && (
+                <Button variant="ghost" size="sm" onPress={() => signOut()}>
+                    <Text className="text-blue-600">Sign Out</Text>
+                </Button>
+            )}
+          </View>
         </View>
 
         {/* Tracking Card */}
