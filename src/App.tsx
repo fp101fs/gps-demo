@@ -20,12 +20,48 @@ const App: React.FC = () => {
   const [address, setAddress] = useState<string>('Fetching address...');
 
   const trackingTimerRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   useEffect(() => {
     if (currentPoint) {
       fetchAddress(currentPoint.lat, currentPoint.lng);
     }
   }, [currentPoint]);
+
+  // Wake Lock Logic
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active');
+      }
+    } catch (err) {
+      console.error('Wake Lock request failed:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Wake Lock released');
+      } catch (err) {
+        console.error('Wake Lock release failed:', err);
+      }
+    }
+  };
+
+  // Re-acquire lock if tab becomes visible again and we are tracking
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isTracking) {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isTracking]);
 
   const fetchAddress = async (lat: number, lng: number) => {
     try {
@@ -176,6 +212,7 @@ const App: React.FC = () => {
         setTrackId(id);
         setStartTime(Date.now());
         setIsTracking(true);
+        await requestWakeLock(); // Keep screen on
         setMode('tracking');
         setShareUrl(`${window.location.origin}${window.location.pathname}?track=${id}`);
 
@@ -230,6 +267,7 @@ const App: React.FC = () => {
   const stopTracking = async () => {
     if (trackingTimerRef.current) clearInterval(trackingTimerRef.current);
     setIsTracking(false);
+    await releaseWakeLock(); // Allow screen to sleep
     
     if (trackId) {
       await supabase
