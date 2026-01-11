@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, Image } from 'react-native';
 
 // Standard import for Leaflet (will only be used if OS is web)
 let L: any;
@@ -40,7 +40,7 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     }).addTo(mapRef.current);
     
     const blueIcon = L.icon({
-        iconUrl: require('../assets/images/marker-blue.webp'),
+        iconUrl: Image.resolveAssetSource(require('../assets/images/marker-blue.webp')).uri,
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
@@ -59,7 +59,7 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
 
     if (!markerRef.current) {
         const blueIcon = L.icon({
-            iconUrl: require('../assets/images/marker-blue.webp'),
+            iconUrl: Image.resolveAssetSource(require('../assets/images/marker-blue.webp')).uri,
             iconSize: [25, 41],
             iconAnchor: [12, 41],
             popupAnchor: [1, -34],
