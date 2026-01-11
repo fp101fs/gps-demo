@@ -3,7 +3,7 @@ import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/c
 import './index.css';
 import MapComponent from './MapComponent';
 import { supabase } from './supabaseClient';
-import type { Point } from './types';
+import type { Point, Journey } from './types';
 
 const App: React.FC = () => {
   const { user } = useUser();
@@ -11,6 +11,7 @@ const App: React.FC = () => {
   const [trackId, setTrackId] = useState<string | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
   const [points, setPoints] = useState<Point[]>([]);
+  const [pastJourneys, setPastJourneys] = useState<Journey[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [updateInterval, setUpdateInterval] = useState(5);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -29,6 +30,27 @@ const App: React.FC = () => {
       subscribeToUpdates(id);
     }
   }, []);
+
+  const fetchPastJourneys = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('tracks')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching past journeys:', error);
+    } else {
+      setPastJourneys(data || []);
+    }
+  };
+
+  useEffect(() => {
+    if (user && mode === 'home') {
+      fetchPastJourneys();
+    }
+  }, [user, mode]);
 
   const loadInitialData = async (id: string) => {
     // Fetch all existing points for this track
@@ -189,6 +211,16 @@ const App: React.FC = () => {
     }
     
     alert('Tracking stopped and saved');
+    fetchPastJourneys(); // Refresh list
+  };
+
+  const viewJourney = (id: string) => {
+    setTrackId(id);
+    setMode('viewing');
+    setPoints([]);
+    setCurrentPoint(undefined);
+    loadInitialData(id);
+    window.history.pushState({}, '', `?track=${id}`);
   };
 
   const formatDuration = (s: number) => {
@@ -208,37 +240,77 @@ const App: React.FC = () => {
       </div>
 
       {mode === 'home' && (
-        <div className="card" style={{ textAlign: 'center' }}>
-          <h2>Track Your Location</h2>
-          <p style={{ color: '#57606a', marginBottom: '24px' }}>
-            {user ? `Welcome, ${user.firstName || 'User'}!` : 'Sign in to start sharing your live location.'}
-          </p>
-          
-          <SignedOut>
-             <div style={{ margin: '20px 0' }}>
-               <SignInButton mode="modal">
-                 <button className="btn-primary">Sign In to Track</button>
-               </SignInButton>
-             </div>
-          </SignedOut>
+        <>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <h2>Track Your Location</h2>
+            <p style={{ color: '#57606a', marginBottom: '24px' }}>
+              {user ? `Welcome, ${user.firstName || 'User'}!` : 'Sign in to start sharing your live location.'}
+            </p>
+            
+            <SignedOut>
+              <div style={{ margin: '20px 0' }}>
+                <SignInButton mode="modal">
+                  <button className="btn-primary">Sign In to Track</button>
+                </SignInButton>
+              </div>
+            </SignedOut>
+
+            <SignedIn>
+              <div style={{ maxWidth: '400px', margin: '0 auto 24px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>
+                  Update Interval (seconds)
+                </label>
+                <input 
+                  type="number" 
+                  value={updateInterval}
+                  onChange={(e) => setUpdateInterval(parseInt(e.target.value))}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d0d7de' }}
+                />
+              </div>
+              <button className="btn-primary" onClick={startTracking}>
+                📍 Track My Location
+              </button>
+            </SignedIn>
+          </div>
 
           <SignedIn>
-            <div style={{ maxWidth: '400px', margin: '0 auto 24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>
-                Update Interval (seconds)
-              </label>
-              <input 
-                type="number" 
-                value={updateInterval}
-                onChange={(e) => setUpdateInterval(parseInt(e.target.value))}
-                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d0d7de' }}
-              />
-            </div>
-            <button className="btn-primary" onClick={startTracking}>
-              📍 Track My Location
-            </button>
+            {pastJourneys.length > 0 && (
+              <div className="card">
+                <h3>📜 My Past Journeys</h3>
+                <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
+                  {pastJourneys.map((journey) => (
+                    <div 
+                      key={journey.id} 
+                      onClick={() => viewJourney(journey.id)}
+                      style={{ 
+                        padding: '16px', 
+                        border: '1px solid #d0d7de', 
+                        borderRadius: '6px', 
+                        cursor: 'pointer',
+                        background: 'white',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600 }}>
+                          {new Date(journey.created_at).toLocaleDateString()} at {new Date(journey.created_at).toLocaleTimeString()}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#57606a', marginTop: '4px' }}>
+                          ID: {journey.id.substring(0, 8)}...
+                        </div>
+                      </div>
+                      <div className={`status ${journey.is_active ? 'status-active' : 'status-inactive'}`} style={{ marginBottom: 0 }}>
+                        {journey.is_active ? 'Active' : 'Completed'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </SignedIn>
-        </div>
+        </>
       )}
 
       {mode === 'tracking' && (
@@ -282,9 +354,9 @@ const App: React.FC = () => {
 
       {mode === 'viewing' && (
         <div>
-          <div className="status status-active">👁️ Viewing Live Stream</div>
+          <div className="status status-active">👁️ Viewing Journey</div>
           <div className="info-box">
-            Viewing real-time journey: <strong>{trackId}</strong>
+            Viewing journey: <strong>{trackId}</strong>
           </div>
           
           <div className="location-info">
@@ -305,7 +377,11 @@ const App: React.FC = () => {
           <MapComponent currentPoint={currentPoint} points={points} />
           
           <div style={{ marginTop: '24px', textAlign: 'center' }}>
-             <button className="btn-secondary" onClick={() => window.location.href = window.location.pathname}>
+             <button className="btn-secondary" onClick={() => {
+               setMode('home');
+               setTrackId(null);
+               window.history.pushState({}, '', window.location.pathname);
+             }}>
                Back to Home
              </button>
           </div>

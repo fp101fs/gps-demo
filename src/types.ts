@@ -4,6 +4,13 @@ export interface Point {
   timestamp: number;
 }
 
+export interface Journey {
+  id: string;
+  created_at: string;
+  end_time?: string;
+  is_active: boolean;
+}
+
 export interface TrackerData {
   points: Point[];
   startTime?: number;
