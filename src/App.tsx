@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './index.css';
 import MapComponent from './MapComponent';
+import { supabase } from './supabaseClient';
 import type { Point } from './types';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'home' | 'tracking' | 'viewing'>('home');
-  const [userId, setUserId] = useState<string | null>(null);
+  const [trackId, setTrackId] = useState<string | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
   const [points, setPoints] = useState<Point[]>([]);
   const [isTracking, setIsTracking] = useState(false);
@@ -15,16 +16,69 @@ const App: React.FC = () => {
   const [shareUrl, setShareUrl] = useState('');
 
   const trackingTimerRef = useRef<number | null>(null);
-  const heartbeatTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const trackId = params.get('track');
-    if (trackId) {
-      setUserId(trackId);
+    const id = params.get('track');
+    if (id) {
+      setTrackId(id);
       setMode('viewing');
+      loadInitialData(id);
+      subscribeToUpdates(id);
     }
   }, []);
+
+  const loadInitialData = async (id: string) => {
+    // Fetch all existing points for this track
+    const { data, error } = await supabase
+      .from('points')
+      .select('lat, lng, timestamp')
+      .eq('track_id', id)
+      .order('timestamp', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching points:', error);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const formattedPoints = data.map(p => ({
+        lat: p.lat,
+        lng: p.lng,
+        timestamp: new Date(p.timestamp).getTime() / 1000
+      }));
+      setPoints(formattedPoints);
+      setCurrentPoint(formattedPoints[formattedPoints.length - 1]);
+    }
+  };
+
+  const subscribeToUpdates = (id: string) => {
+    const channel = supabase
+      .channel(`track:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'points',
+          filter: `track_id=eq.${id}`
+        },
+        (payload) => {
+          const newPoint = {
+            lat: payload.new.lat,
+            lng: payload.new.lng,
+            timestamp: new Date(payload.new.timestamp).getTime() / 1000
+          };
+          setCurrentPoint(newPoint);
+          setPoints(prev => [...prev, newPoint]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
 
   useEffect(() => {
     let interval: number;
@@ -36,16 +90,29 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [isTracking, startTime]);
 
-  const startTracking = () => {
+  const startTracking = async () => {
     if (!navigator.geolocation) {
       alert('Geolocation not supported');
       return;
     }
 
+    // 1. Create a track in Supabase
+    const { data: track, error: trackError } = await supabase
+      .from('tracks')
+      .insert([{ is_active: true }])
+      .select()
+      .single();
+
+    if (trackError || !track) {
+      alert('Failed to initialize tracking on server');
+      return;
+    }
+
+    const id = track.id;
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const id = 'user_' + Math.random().toString(36).substr(2, 9);
-        setUserId(id);
+      async (position) => {
+        setTrackId(id);
         setStartTime(Date.now());
         setIsTracking(true);
         setMode('tracking');
@@ -56,8 +123,12 @@ const App: React.FC = () => {
           lng: position.coords.longitude,
           timestamp: Math.floor(Date.now() / 1000)
         };
+        
         setCurrentPoint(initialPoint);
         setPoints([initialPoint]);
+
+        // 2. Save first point
+        await savePoint(id, initialPoint);
 
         startLocationUpdates(id);
       },
@@ -66,9 +137,22 @@ const App: React.FC = () => {
     );
   };
 
+  const savePoint = async (id: string, point: Point) => {
+    const { error } = await supabase
+      .from('points')
+      .insert([{
+        track_id: id,
+        lat: point.lat,
+        lng: point.lng,
+        timestamp: new Date(point.timestamp * 1000).toISOString()
+      }]);
+    
+    if (error) console.error('Error saving point:', error);
+  };
+
   const startLocationUpdates = (id: string) => {
     trackingTimerRef.current = window.setInterval(() => {
-      navigator.geolocation.getCurrentPosition((position) => {
+      navigator.geolocation.getCurrentPosition(async (position) => {
         const newPoint = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -77,18 +161,23 @@ const App: React.FC = () => {
         setCurrentPoint(newPoint);
         setPoints(prev => [...prev, newPoint]);
         
-        // In a real app, you would send this to the server here:
-        // api.updateLocation(id, newPoint);
-        console.log('Updating location for', id, newPoint);
+        await savePoint(id, newPoint);
       });
     }, updateInterval * 1000);
   };
 
-  const stopTracking = () => {
+  const stopTracking = async () => {
     if (trackingTimerRef.current) clearInterval(trackingTimerRef.current);
-    if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     setIsTracking(false);
-    alert('Tracking stopped');
+    
+    if (trackId) {
+      await supabase
+        .from('tracks')
+        .update({ is_active: false, end_time: new Date().toISOString() })
+        .eq('id', trackId);
+    }
+    
+    alert('Tracking stopped and saved');
   };
 
   const formatDuration = (s: number) => {
@@ -101,7 +190,7 @@ const App: React.FC = () => {
     <div className="container">
       <div className="header">
         <h1>📍 Live Location Tracker</h1>
-        <p>Share your real-time location securely</p>
+        <p>Powered by Supabase Realtime</p>
       </div>
 
       {mode === 'home' && (
@@ -129,7 +218,7 @@ const App: React.FC = () => {
 
       {mode === 'tracking' && (
         <div>
-          <div className="status status-active">🟢 Location Tracking Active</div>
+          <div className="status status-active">🟢 Live Tracking (Synced to DB)</div>
           
           <div className="location-info">
             <div className="location-info-item">
@@ -168,11 +257,28 @@ const App: React.FC = () => {
 
       {mode === 'viewing' && (
         <div>
-          <div className="status status-active">👁️ Viewing Live Location</div>
+          <div className="status status-active">👁️ Viewing Live Stream</div>
           <div className="info-box">
-            Viewing journey for user: <strong>{userId}</strong>
+            Viewing real-time journey: <strong>{trackId}</strong>
           </div>
+          
+          <div className="location-info">
+            <div className="location-info-item">
+              <label>Latitude</label>
+              <span>{currentPoint?.lat.toFixed(6) || 'Waiting...'}</span>
+            </div>
+            <div className="location-info-item">
+              <label>Longitude</label>
+              <span>{currentPoint?.lng.toFixed(6) || 'Waiting...'}</span>
+            </div>
+            <div className="location-info-item">
+              <label>Data Points</label>
+              <span>{points.length}</span>
+            </div>
+          </div>
+
           <MapComponent currentPoint={currentPoint} points={points} />
+          
           <div style={{ marginTop: '24px', textAlign: 'center' }}>
              <button className="btn-secondary" onClick={() => window.location.href = window.location.pathname}>
                Back to Home
