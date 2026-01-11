@@ -31,6 +31,7 @@ export default function HomeScreen() {
   const [duration, setDuration] = useState(0);
   const [address, setAddress] = useState('Waiting for location...');
   const [pastJourneys, setPastJourneys] = useState<Journey[]>([]);
+  const [copied, setCopied] = useState(false);
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -178,9 +179,12 @@ export default function HomeScreen() {
     const shareUrl = `${baseUrl}/track/${trackId}`;
     
     await Clipboard.setStringAsync(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
     
     if (Platform.OS === 'web') {
-        Alert.alert('Link Copied', 'Share this link with others to view your live journey!');
+        // Fallback alert if user missed the button change
+        // Alert.alert('Link Copied', 'Share this link with others to view your live journey!');
     } else {
         try {
             await Share.share({
@@ -207,8 +211,10 @@ export default function HomeScreen() {
           </View>
           <View className="flex-row gap-2">
             {isTracking && (
-                <Button variant="outline" size="sm" onPress={shareJourney}>
-                    <Text className="text-blue-600">Share</Text>
+                <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
+                    <Text className={copied ? "text-green-600" : "text-blue-600"}>
+                        {copied ? 'Copied!' : 'Share'}
+                    </Text>
                 </Button>
             )}
             {user && (
