@@ -42,9 +42,9 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     
     const blueIcon = L.icon({
         iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
-        iconSize: [40, 60],
-        iconAnchor: [20, 60],
-        popupAnchor: [1, -34],
+        iconSize: [40, 40],
+        iconAnchor: [20, 40],
+        popupAnchor: [0, -40],
         className: 'marker-pulse'
     });
     
@@ -62,9 +62,9 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     if (!markerRef.current) {
         const blueIcon = L.icon({
             iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
-            iconSize: [40, 60],
-            iconAnchor: [20, 60],
-            popupAnchor: [1, -34],
+            iconSize: [40, 40],
+            iconAnchor: [20, 40],
+            popupAnchor: [0, -40],
             className: 'marker-pulse'
         });
                 markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
