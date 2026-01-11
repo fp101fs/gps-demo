@@ -17,8 +17,36 @@ const App: React.FC = () => {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [duration, setDuration] = useState<number>(0);
   const [shareUrl, setShareUrl] = useState('');
+  const [address, setAddress] = useState<string>('Fetching address...');
 
   const trackingTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (currentPoint) {
+      fetchAddress(currentPoint.lat, currentPoint.lng);
+    }
+  }, [currentPoint]);
+
+  const fetchAddress = async (lat: number, lng: number) => {
+    try {
+      // Using Nominatim OpenStreetMap API for reverse geocoding
+      // Note: usage limits apply (max 1 req/sec recommended)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      // Construct a cleaner address string
+      const addr = data.address;
+      const shortAddress = addr 
+        ? `${addr.road || ''} ${addr.house_number || ''}, ${addr.city || addr.town || addr.village || ''}`.trim().replace(/^,/, '').replace(/, $/, '') 
+        : data.display_name;
+      
+      setAddress(shortAddress || 'Address not found');
+    } catch (error) {
+      console.error('Error fetching address:', error);
+      setAddress('Location unavailable');
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -330,6 +358,10 @@ const App: React.FC = () => {
               <label>Duration</label>
               <span>{formatDuration(duration)}</span>
             </div>
+            <div className="location-info-item" style={{ gridColumn: '1 / -1' }}>
+              <label>Nearest Address</label>
+              <span style={{ fontSize: '14px', wordBreak: 'break-word' }}>{address}</span>
+            </div>
           </div>
 
           <div className="card">
@@ -371,6 +403,10 @@ const App: React.FC = () => {
             <div className="location-info-item">
               <label>Data Points</label>
               <span>{points.length}</span>
+            </div>
+            <div className="location-info-item" style={{ gridColumn: '1 / -1' }}>
+              <label>Current Address</label>
+              <span style={{ fontSize: '14px', wordBreak: 'break-word' }}>{address}</span>
             </div>
           </div>
 
