@@ -122,9 +122,16 @@ export default function HomeScreen() {
 
   const stopTracking = async () => {
     if (locationSubscription.current) {
-      locationSubscription.current.remove();
+      try {
+        locationSubscription.current.remove();
+      } catch (e) {
+        // This catches the 'LocationEventEmitter.removeSubscription is not a function' 
+        // error that occurs in some Expo versions on Web.
+        console.log('Location tracking stopped (cleanup error ignored)');
+      }
       locationSubscription.current = null;
     }
+    
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
