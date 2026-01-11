@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Platform, Image } from 'react-native';
+import { View, Text, Platform } from 'react-native';
+import { Asset } from 'expo-asset';
 
 // Standard import for Leaflet (will only be used if OS is web)
 let L: any;
@@ -39,13 +40,13 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapRef.current);
     
-    const blueIcon = L.icon({
-        iconUrl: Image.resolveAssetSource(require('../assets/images/marker-blue.webp')).uri,
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-    });
-
+            const blueIcon = L.icon({
+                iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+            });
+    
     setIsReady(true);
 
     return () => {
@@ -58,13 +59,13 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     if (!mapRef.current || !currentPoint || !L) return;
 
     if (!markerRef.current) {
-        const blueIcon = L.icon({
-            iconUrl: Image.resolveAssetSource(require('../assets/images/marker-blue.webp')).uri,
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-        });
-        markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
+                const blueIcon = L.icon({
+                    iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                });
+                markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
     }
