@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react';
 import './index.css';
 import MapComponent from './MapComponent';
 import { supabase } from './supabaseClient';
 import type { Point } from './types';
 
 const App: React.FC = () => {
+  const { user } = useUser();
   const [mode, setMode] = useState<'home' | 'tracking' | 'viewing'>('home');
   const [trackId, setTrackId] = useState<string | null>(null);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
@@ -96,14 +98,23 @@ const App: React.FC = () => {
       return;
     }
 
-    // 1. Create a track in Supabase
+    if (!user) {
+      alert('You must be signed in to track location.');
+      return;
+    }
+
+    // 1. Create a track in Supabase linked to the Clerk user
     const { data: track, error: trackError } = await supabase
       .from('tracks')
-      .insert([{ is_active: true }])
+      .insert([{ 
+        is_active: true,
+        user_id: user.id 
+      }])
       .select()
       .single();
 
     if (trackError || !track) {
+      console.error('Track creation error:', trackError);
       alert('Failed to initialize tracking on server');
       return;
     }
@@ -188,7 +199,10 @@ const App: React.FC = () => {
 
   return (
     <div className="container">
-      <div className="header">
+      <div className="header" style={{ position: 'relative' }}>
+        <div style={{ position: 'absolute', top: '24px', right: '24px' }}>
+          <UserButton />
+        </div>
         <h1>📍 Live Location Tracker</h1>
         <p>Powered by Supabase Realtime</p>
       </div>
@@ -197,22 +211,33 @@ const App: React.FC = () => {
         <div className="card" style={{ textAlign: 'center' }}>
           <h2>Track Your Location</h2>
           <p style={{ color: '#57606a', marginBottom: '24px' }}>
-            Click below to start sharing your live location.
+            {user ? `Welcome, ${user.firstName || 'User'}!` : 'Sign in to start sharing your live location.'}
           </p>
-          <div style={{ maxWidth: '400px', margin: '0 auto 24px' }}>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>
-              Update Interval (seconds)
-            </label>
-            <input 
-              type="number" 
-              value={updateInterval}
-              onChange={(e) => setUpdateInterval(parseInt(e.target.value))}
-              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d0d7de' }}
-            />
-          </div>
-          <button className="btn-primary" onClick={startTracking}>
-            📍 Track My Location
-          </button>
+          
+          <SignedOut>
+             <div style={{ margin: '20px 0' }}>
+               <SignInButton mode="modal">
+                 <button className="btn-primary">Sign In to Track</button>
+               </SignInButton>
+             </div>
+          </SignedOut>
+
+          <SignedIn>
+            <div style={{ maxWidth: '400px', margin: '0 auto 24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px' }}>
+                Update Interval (seconds)
+              </label>
+              <input 
+                type="number" 
+                value={updateInterval}
+                onChange={(e) => setUpdateInterval(parseInt(e.target.value))}
+                style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d0d7de' }}
+              />
+            </div>
+            <button className="btn-primary" onClick={startTracking}>
+              📍 Track My Location
+            </button>
+          </SignedIn>
         </div>
       )}
 
