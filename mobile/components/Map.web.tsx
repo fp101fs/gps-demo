@@ -40,7 +40,7 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     }).addTo(mapRef.current);
     
     const blueIcon = L.icon({
-        iconUrl: require('../assets/images/marker-blue.svg'),
+        iconUrl: require('../assets/images/marker-blue.webp'),
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
@@ -59,7 +59,7 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
 
     if (!markerRef.current) {
         const blueIcon = L.icon({
-            iconUrl: require('../assets/images/marker-blue.svg'),
+            iconUrl: require('../assets/images/marker-blue.webp'),
             iconSize: [25, 41],
             iconAnchor: [12, 41],
             popupAnchor: [1, -34],
