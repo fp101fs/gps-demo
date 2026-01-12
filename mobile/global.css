@@ -16,4 +16,7 @@
 
 .marker-pulse {
   animation: pulse-red 3s infinite ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

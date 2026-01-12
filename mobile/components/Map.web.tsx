@@ -60,14 +60,14 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     if (!mapRef.current || !currentPoint || !L) return;
 
     if (!markerRef.current) {
-        const blueIcon = L.icon({
-            iconUrl: Asset.fromModule(require('../assets/images/marker-blue.webp')).uri,
+        const iconUrl = Asset.fromModule(require('../assets/images/marker-blue.webp')).uri;
+        const blueIcon = L.divIcon({
+            html: `<div class="marker-pulse" style="width: 100px; height: 100px; background-image: url(${iconUrl}); background-size: contain; background-repeat: no-repeat; background-position: center;"></div>`,
             iconSize: [100, 100],
-            iconAnchor: [50, 95],
-            popupAnchor: [0, -95],
-            className: 'marker-pulse'
+            iconAnchor: [50, 50],
+            className: ''
         });
-                markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
+        markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
     }
