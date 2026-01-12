@@ -41,10 +41,10 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     }).addTo(mapRef.current);
     
     const blueIcon = L.icon({
-        iconUrl: Asset.fromModule(require('../assets/images/marker-red-circle.webp')).uri,
-        iconSize: [25, 25],
-        iconAnchor: [12.5, 12.5],
-        popupAnchor: [0, -12.5],
+        iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
+        iconSize: [50, 50],
+        iconAnchor: [25, 25],
+        popupAnchor: [0, -25],
         className: 'marker-pulse'
     });
     
@@ -61,10 +61,10 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
 
     if (!markerRef.current) {
         const blueIcon = L.icon({
-            iconUrl: Asset.fromModule(require('../assets/images/marker-red-circle.webp')).uri,
-            iconSize: [25, 25],
-            iconAnchor: [12.5, 12.5],
-            popupAnchor: [0, -12.5],
+            iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
+            iconSize: [50, 50],
+            iconAnchor: [25, 25],
+            popupAnchor: [0, -25],
             className: 'marker-pulse'
         });
         markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
