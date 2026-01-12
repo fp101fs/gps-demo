@@ -19,14 +19,47 @@ interface MapProps {
   currentPoint?: Point;
   points: Point[];
   isReplayMode?: boolean;
+  avatarUrl?: string;
 }
 
-export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl }: MapProps) {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
+
+  // Helper to create the correct icon
+  const createIcon = () => {
+    if (avatarUrl) {
+      return L.divIcon({
+        className: 'marker-pulse',
+        html: `
+          <div style="
+            width: 60px; 
+            height: 60px; 
+            border-radius: 30px; 
+            border: 3px solid white; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            overflow: hidden;
+            background-color: white;
+          ">
+            <img src="${avatarUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+          </div>
+        `,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30],
+      });
+    }
+
+    return L.icon({
+      iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
+      iconSize: [100, 100],
+      iconAnchor: [50, 50],
+      popupAnchor: [0, -50],
+      className: 'marker-pulse'
+    });
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !containerRef.current || mapRef.current) return;
@@ -40,14 +73,6 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapRef.current);
     
-    const blueIcon = L.icon({
-        iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
-        iconSize: [100, 100],
-        iconAnchor: [50, 50],
-        popupAnchor: [0, -50],
-        className: 'marker-pulse'
-    });
-    
     setIsReady(true);
 
     return () => {
@@ -56,26 +81,23 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     };
   }, []);
 
+  // Handle Marker Updates (including avatar change)
   useEffect(() => {
     if (!mapRef.current || !currentPoint || !L) return;
 
+    const icon = createIcon();
+
     if (!markerRef.current) {
-        const blueIcon = L.icon({
-            iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
-            iconSize: [100, 100],
-            iconAnchor: [50, 50],
-            popupAnchor: [0, -50],
-            className: 'marker-pulse'
-        });
-        markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon: blueIcon }).addTo(mapRef.current);
+      markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
+      markerRef.current.setIcon(icon);
     }
 
     if (!isReplayMode) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
     }
-  }, [currentPoint, isReplayMode]);
+  }, [currentPoint, isReplayMode, avatarUrl]);
 
   useEffect(() => {
     if (!mapRef.current || !L) return;

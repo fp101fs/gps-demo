@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { View, Image } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export interface Point {
@@ -12,9 +12,10 @@ interface MapProps {
   currentPoint?: Point;
   points: Point[];
   isReplayMode?: boolean;
+  avatarUrl?: string;
 }
 
-export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200">
       <MapView
         ref={mapRef}
-        provider={PROVIDER_DEFAULT} // Uses Apple Maps on iOS, Google on Android
+        provider={PROVIDER_DEFAULT}
         style={{ width: '100%', height: '100%' }}
         initialRegion={{
           latitude: currentPoint?.lat || 37.78825,
@@ -40,8 +41,6 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         }}
-        showsUserLocation
-        showsMyLocationButton
       >
         {points.length > 1 && (
             <Polyline
@@ -55,7 +54,30 @@ export default function Map({ currentPoint, points, isReplayMode }: MapProps) {
             <Marker 
                 coordinate={{ latitude: currentPoint.lat, longitude: currentPoint.lng }}
                 title="Current Location"
-            />
+            >
+                {avatarUrl ? (
+                    <View style={{ 
+                        width: 40, 
+                        height: 40, 
+                        borderRadius: 20, 
+                        borderWidth: 2, 
+                        borderColor: 'white', 
+                        overflow: 'hidden',
+                        backgroundColor: 'white'
+                    }}>
+                        <Image 
+                            source={{ uri: avatarUrl }} 
+                            style={{ width: '100%', height: '100%' }} 
+                        />
+                    </View>
+                ) : (
+                    <Image 
+                        source={require('../assets/images/marker-green-cross.png')} 
+                        style={{ width: 40, height: 40 }} 
+                        resizeMode="contain"
+                    />
+                )}
+            </Marker>
         )}
       </MapView>
     </View>

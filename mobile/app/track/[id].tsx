@@ -12,21 +12,23 @@ export default function SharedTrackScreen() {
   const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
 
     const fetchInitialData = async () => {
       try {
-        // Fetch track status
+        // Fetch track status and avatar
         const { data: track, error: trackError } = await supabase
           .from('tracks')
-          .select('is_active')
+          .select('is_active, avatar_url')
           .eq('id', id)
           .single();
 
         if (trackError) throw trackError;
         setIsActive(track.is_active);
+        if (track.avatar_url) setAvatarUrl(track.avatar_url);
 
         // Fetch existing points
         const { data: pointsData, error: pointsError } = await supabase
@@ -118,7 +120,7 @@ export default function SharedTrackScreen() {
       <Stack.Screen options={{ title: isActive ? '🔴 Live Journey' : 'Past Journey' }} />
       
       <View className="flex-1">
-        <Map currentPoint={currentPoint} points={points} />
+        <Map currentPoint={currentPoint} points={points} avatarUrl={avatarUrl} />
       </View>
 
       <View className="p-4 bg-white border-t border-gray-200">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform, Share } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
@@ -17,6 +17,7 @@ interface Journey {
   id: string;
   created_at: string;
   is_active: boolean;
+  avatar_url?: string;
 }
 
 export default function HomeScreen() {
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const [address, setAddress] = useState('Waiting for location...');
   const [pastJourneys, setPastJourneys] = useState<Journey[]>([]);
   const [copied, setCopied] = useState(false);
+  const [useProfileIcon, setUseProfileIcon] = useState(false);
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -68,9 +70,14 @@ export default function HomeScreen() {
     }
 
     // Create Track in DB
+    const avatarUrl = useProfileIcon ? user.imageUrl : null;
     const { data: track, error } = await supabase
         .from('tracks')
-        .insert([{ is_active: true, user_id: user.id }])
+        .insert([{ 
+            is_active: true, 
+            user_id: user.id,
+            avatar_url: avatarUrl
+        }])
         .select()
         .single();
 
@@ -236,7 +243,7 @@ export default function HomeScreen() {
         <Card className="mb-6 overflow-hidden">
             {/* Map Container - Height is fixed */}
             <View className="h-64 bg-gray-100">
-                <Map currentPoint={currentPoint} points={points} />
+                <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} />
                 
                 {/* Overlay Stats (iOS Style Blur) */}
                 {isTracking && (
@@ -260,9 +267,26 @@ export default function HomeScreen() {
 
             <CardContent className="pt-6">
                 {!isTracking ? (
-                    <Button onPress={startTracking} className="w-full">
-                        <Text className="text-white font-bold">Start New Journey</Text>
-                    </Button>
+                    <View className="gap-4">
+                        <View className="flex-row items-center justify-between bg-gray-50 p-3 rounded-lg">
+                            <View className="flex-row items-center gap-3">
+                                {user?.imageUrl ? (
+                                    <Image source={{ uri: user.imageUrl }} className="w-8 h-8 rounded-full" />
+                                ) : (
+                                    <View className="w-8 h-8 rounded-full bg-gray-300" />
+                                )}
+                                <Text className="text-gray-700 font-medium">Use Profile Picture</Text>
+                            </View>
+                            <Switch 
+                                value={useProfileIcon} 
+                                onValueChange={setUseProfileIcon}
+                                trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                            />
+                        </View>
+                        <Button onPress={startTracking} className="w-full">
+                            <Text className="text-white font-bold">Start New Journey</Text>
+                        </Button>
+                    </View>
                 ) : (
                     <Button onPress={stopTracking} variant="destructive" className="w-full">
                          <Text className="text-white font-bold">Stop Tracking</Text>
