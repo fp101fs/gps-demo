@@ -62,8 +62,37 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
       className: ''
     });
   };
-  
-  // ... (keep existing useEffects)
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !containerRef.current || mapRef.current) return;
+
+    let startLat = 0;
+    let startLng = 0;
+    let zoom = 2;
+
+    if (currentPoint) {
+        startLat = currentPoint.lat;
+        startLng = currentPoint.lng;
+        zoom = 15;
+    } else if (fleetMembers.length > 0) {
+        startLat = fleetMembers[0].lat;
+        startLng = fleetMembers[0].lng;
+        zoom = 10;
+    }
+
+    mapRef.current = L.map(containerRef.current).setView([startLat, startLng], zoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(mapRef.current);
+    
+    setIsReady(true);
+
+    return () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
+  }, []);
 
   // Handle Fleet Members
   useEffect(() => {
@@ -78,7 +107,9 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
     });
 
     // Update or Add markers
+    const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
+        latLngs.push([member.lat, member.lng]);
         const icon = createIcon(member.avatarUrl);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
@@ -88,23 +119,37 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
             fleetMarkersRef.current[member.id] = marker;
         }
     });
-  }, [fleetMembers]);
+
+    // Auto-fit bounds if we have members and no active tracking point
+    if (!currentPoint && latLngs.length > 0) {
+        const bounds = L.latLngBounds(latLngs);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [fleetMembers, currentPoint]);
 
   // Handle Marker Updates (including avatar change)
   useEffect(() => {
-    if (!mapRef.current || !currentPoint || !L) return;
+    if (!mapRef.current || !L) return;
 
-    const icon = createIcon(avatarUrl);
+    if (currentPoint) {
+        const icon = createIcon(avatarUrl);
 
-    if (!markerRef.current) {
-      markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
+        if (!markerRef.current) {
+          markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
+        } else {
+          markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
+          markerRef.current.setIcon(icon);
+        }
+    
+        if (!isReplayMode) {
+          mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
+        }
     } else {
-      markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
-      markerRef.current.setIcon(icon);
-    }
-
-    if (!isReplayMode) {
-      mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
+        // If currentPoint is removed, remove the marker
+        if (markerRef.current) {
+            mapRef.current.removeLayer(markerRef.current);
+            markerRef.current = null;
+        }
     }
   }, [currentPoint, isReplayMode, avatarUrl]);
 
