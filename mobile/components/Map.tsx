@@ -13,12 +13,21 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string }[];
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [] }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
+    // If we have fleet members but no current point, fit to fleet
+    if (!currentPoint && fleetMembers.length > 0 && mapRef.current) {
+         mapRef.current.fitToCoordinates(
+             fleetMembers.map(m => ({ latitude: m.lat, longitude: m.lng })),
+             { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: true }
+         );
+    }
+    
     if (currentPoint && !isReplayMode && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: currentPoint.lat,
@@ -49,6 +58,37 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl }: M
                 strokeWidth={4}
             />
         )}
+        
+        {fleetMembers.map(member => (
+            <Marker
+                key={member.id}
+                coordinate={{ latitude: member.lat, longitude: member.lng }}
+                title="Fleet Member"
+            >
+                {member.avatarUrl ? (
+                    <View style={{ 
+                        width: 40, 
+                        height: 40, 
+                        borderRadius: 20, 
+                        borderWidth: 2, 
+                        borderColor: 'white', 
+                        overflow: 'hidden',
+                        backgroundColor: 'white'
+                    }}>
+                        <Image 
+                            source={{ uri: member.avatarUrl }} 
+                            style={{ width: '100%', height: '100%' }} 
+                        />
+                    </View>
+                ) : (
+                    <Image 
+                        source={require('../assets/images/marker-green-cross.png')} 
+                        style={{ width: 40, height: 40 }} 
+                        resizeMode="contain"
+                    />
+                )}
+            </Marker>
+        ))}
         
         {currentPoint && (
             <Marker 

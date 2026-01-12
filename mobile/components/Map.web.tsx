@@ -20,72 +20,81 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string }[];
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [] }: MapProps) {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const fleetMarkersRef = useRef<{ [key: string]: any }>({});
   const polylineRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
 
   // Helper to create the correct icon
-  const createIcon = () => {
-    if (avatarUrl) {
+  const createIcon = (url?: string) => {
+    if (url) {
       return L.divIcon({
         className: 'marker-pulse',
         html: `
           <div style="
-            width: 60px; 
-            height: 60px; 
-            border-radius: 30px; 
-            border: 3px solid white; 
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            width: 40px; 
+            height: 40px; 
+            border-radius: 20px; 
+            border: 2px solid white; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             overflow: hidden;
             background-color: white;
           ">
-            <img src="${avatarUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+            <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" />
           </div>
         `,
-        iconSize: [60, 60],
-        iconAnchor: [30, 30],
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
       });
     }
 
     return L.icon({
       iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
-      iconSize: [100, 100],
-      iconAnchor: [50, 50],
-      popupAnchor: [0, -50],
-      className: 'marker-pulse'
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20],
+      className: ''
     });
   };
+  
+  // ... (keep existing useEffects)
 
+  // Handle Fleet Members
   useEffect(() => {
-    if (Platform.OS !== 'web' || !containerRef.current || mapRef.current) return;
+    if (!mapRef.current || !L) return;
 
-    const startLat = currentPoint?.lat || 0;
-    const startLng = currentPoint?.lng || 0;
+    // Remove markers for members no longer present
+    Object.keys(fleetMarkersRef.current).forEach(id => {
+        if (!fleetMembers.find(m => m.id === id)) {
+            mapRef.current.removeLayer(fleetMarkersRef.current[id]);
+            delete fleetMarkersRef.current[id];
+        }
+    });
 
-    mapRef.current = L.map(containerRef.current).setView([startLat, startLng], 15);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(mapRef.current);
-    
-    setIsReady(true);
-
-    return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, []);
+    // Update or Add markers
+    fleetMembers.forEach(member => {
+        const icon = createIcon(member.avatarUrl);
+        if (fleetMarkersRef.current[member.id]) {
+            fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
+            fleetMarkersRef.current[member.id].setIcon(icon);
+        } else {
+            const marker = L.marker([member.lat, member.lng], { icon }).addTo(mapRef.current);
+            fleetMarkersRef.current[member.id] = marker;
+        }
+    });
+  }, [fleetMembers]);
 
   // Handle Marker Updates (including avatar change)
   useEffect(() => {
     if (!mapRef.current || !currentPoint || !L) return;
 
-    const icon = createIcon();
+    const icon = createIcon(avatarUrl);
 
     if (!markerRef.current) {
       markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);

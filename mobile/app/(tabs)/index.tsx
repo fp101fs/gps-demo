@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
@@ -34,6 +34,7 @@ export default function HomeScreen() {
   const [pastJourneys, setPastJourneys] = useState<Journey[]>([]);
   const [copied, setCopied] = useState(false);
   const [useProfileIcon, setUseProfileIcon] = useState(false);
+  const [fleetCode, setFleetCode] = useState('');
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -76,7 +77,8 @@ export default function HomeScreen() {
         .insert([{ 
             is_active: true, 
             user_id: user.id,
-            avatar_url: avatarUrl
+            avatar_url: avatarUrl,
+            party_code: fleetCode || null
         }])
         .select()
         .single();
@@ -116,13 +118,19 @@ export default function HomeScreen() {
         setPoints(prev => [...prev, newPoint]);
         fetchAddress(newPoint.lat, newPoint.lng);
 
-        // Save to DB
+        // Save to DB (Point)
         await supabase.from('points').insert([{
             track_id: track.id,
             lat: newPoint.lat,
             lng: newPoint.lng,
             timestamp: new Date().toISOString()
         }]);
+        
+        // Update Track (Latest Position for Fleet)
+        await supabase.from('tracks').update({
+            lat: newPoint.lat,
+            lng: newPoint.lng
+        }).eq('id', track.id);
       }
     );
   };
@@ -283,6 +291,18 @@ export default function HomeScreen() {
                                 trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
                             />
                         </View>
+                        
+                        <View className="bg-gray-50 p-3 rounded-lg">
+                             <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
+                             <TextInput 
+                                value={fleetCode}
+                                onChangeText={setFleetCode}
+                                placeholder="e.g. 'bachelor-party'"
+                                className="bg-white p-2 rounded border border-gray-200"
+                                autoCapitalize="none"
+                             />
+                        </View>
+
                         <Button onPress={startTracking} className="w-full">
                             <Text className="text-white font-bold">Start New Journey</Text>
                         </Button>
