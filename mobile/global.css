@@ -2,12 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes pulse-red {
+@keyframes pulse-cyan {
   0% {
     filter: none;
   }
   50% {
-    filter: sepia(100%) saturate(600%) hue-rotate(-25deg) brightness(90%);
+    filter: sepia(100%) saturate(1000%) hue-rotate(140deg) brightness(110%);
   }
   100% {
     filter: none;
@@ -15,7 +15,7 @@
 }
 
 .marker-pulse {
-  animation: pulse-red 3s infinite ease-in-out;
+  animation: pulse-cyan 3s infinite ease-in-out;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
