@@ -21,10 +21,12 @@ interface MapProps {
   isReplayMode?: boolean;
   avatarUrl?: string;
   fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string }[];
+  theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [] }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [], theme = 'light' }: MapProps) {
   const mapRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const fleetMarkersRef = useRef<{ [key: string]: any }>({});
   const polylineRef = useRef<any>(null);
@@ -82,9 +84,16 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
 
     mapRef.current = L.map(containerRef.current).setView([startLat, startLng], zoom);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(mapRef.current);
+    // Initial Tile Layer
+    const tileUrl = theme === 'dark' 
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        
+    const attribution = theme === 'dark'
+        ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        : '&copy; OpenStreetMap contributors';
+
+    tileLayerRef.current = L.tileLayer(tileUrl, { attribution }).addTo(mapRef.current);
     
     setIsReady(true);
 
@@ -93,6 +102,17 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
       mapRef.current = null;
     };
   }, []);
+
+  // Handle Theme Changes
+  useEffect(() => {
+      if (!mapRef.current || !tileLayerRef.current) return;
+      
+      const tileUrl = theme === 'dark' 
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      
+      tileLayerRef.current.setUrl(tileUrl);
+  }, [theme]);
 
   // Handle Fleet Members
   useEffect(() => {
