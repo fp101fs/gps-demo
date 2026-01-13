@@ -63,6 +63,7 @@ export default function HomeScreen() {
 
   // Privacy Modal State
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [shareSuccessVisible, setShareSuccessVisible] = useState(false);
   const [tempPrivacyMode, setTempPrivacyMode] = useState<'link' | 'private'>('link');
   const [tempAllowedEmails, setTempAllowedEmails] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState('');
@@ -295,6 +296,7 @@ export default function HomeScreen() {
       setTimeout(() => setCopied(false), 2000);
       
       setShareModalVisible(false);
+      setShareSuccessVisible(true);
       
       if (Platform.OS !== 'web') {
           await Share.share({ message: `Follow my journey: ${url}`, url });
@@ -545,6 +547,63 @@ export default function HomeScreen() {
                 </View>
 
                 <Button onPress={confirmShare} className="w-full h-14"><Text className="text-white font-bold text-lg">Confirm & Share Link</Text></Button>
+            </View>
+        </View>
+      </Modal>
+
+      {/* Share Success Modal */}
+      <Modal visible={shareSuccessVisible} transparent={true} animationType="fade" onRequestClose={() => setShareSuccessVisible(false)}>
+        <View className="flex-1 justify-center items-center bg-black/50 p-4">
+            <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-xl w-full max-w-lg mx-auto">
+                <View className="flex-row justify-between items-center mb-6">
+                    <View className="flex-row items-center gap-2">
+                        <View className="bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full">
+                            <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+                        </View>
+                        <Text className="text-xl font-bold text-gray-900 dark:text-white">Share Ready!</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setShareSuccessVisible(false)}><Ionicons name="close" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} /></TouchableOpacity>
+                </View>
+
+                {/* Location Preview */}
+                <View className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl mb-6 border border-gray-100 dark:border-gray-700">
+                    <Text className="text-[10px] font-bold text-gray-400 uppercase mb-2">Location Preview ({shareType})</Text>
+                    <Text className="text-gray-900 dark:text-white font-medium mb-1" numberOfLines={2}>
+                        {shareType === 'address' ? address : `GPS: ${currentPoint?.lat.toFixed(6)}, ${currentPoint?.lng.toFixed(6)}`}
+                    </Text>
+                    <Text className="text-gray-500 dark:text-gray-400 text-[10px]">
+                        {shareType === 'live' ? 'Updating in real-time' : 'Fixed point shared'}
+                    </Text>
+                </View>
+
+                {/* QR Code */}
+                <View className="items-center mb-6">
+                    <View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+                        <QRCode
+                            value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}
+                            size={160}
+                            color="black"
+                            backgroundColor="white"
+                        />
+                    </View>
+                    <Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text>
+                </View>
+
+                {/* URL and Share Button */}
+                <View className="gap-3">
+                    <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center">
+                        <Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>
+                            {`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}
+                        </Text>
+                        <TouchableOpacity onPress={() => shareJourney()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg">
+                            <Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12">
+                        <Text className="text-white font-bold">Done</Text>
+                    </Button>
+                </View>
             </View>
         </View>
       </Modal>

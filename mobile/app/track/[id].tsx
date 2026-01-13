@@ -13,9 +13,11 @@ import { Notifications } from '@/lib/notifications';
 import { getDistanceFromLatLonInM } from '@/lib/utils';
 import { Ionicons } from '@expo/vector-icons';
 
+type AccessStatus = 'checking' | 'allowed' | 'denied_privacy' | 'needs_password';
+
 export default function SharedTrackScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn, isLoaded: isUserLoaded } = useUser();
   const { colorScheme } = useColorScheme();
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
   const { width } = useWindowDimensions();
@@ -35,6 +37,13 @@ export default function SharedTrackScreen() {
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   
+  // Privacy State
+  const [accessStatus, setAccessStatus] = useState<AccessStatus>('checking');
+  const [correctPassword, setCorrectPassword] = useState<string | null>(null);
+  const [enteredPassword, setEnteredPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+
+  // Share Back State
   const [isSharing, setIsSharing] = useState(false);
   const [myTrackId, setMyTrackId] = useState<string | null>(null);
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
@@ -63,17 +72,44 @@ export default function SharedTrackScreen() {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
       const data = await res.json();
       setResolvedAddress(data.display_name || 'Address not found');
-    } catch (e) {
-      console.error('Address fetch failed', e);
-    }
+    } catch (e) {}
   };
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !isUserLoaded) return;
+
     const fetchInitialData = async () => {
       try {
-        const { data: track, error: trackError } = await supabase.from('tracks').select('is_active, avatar_url, note, expires_at, user_id, created_at, share_type, lat, lng').eq('id', id).single();
+        const { data: track, error: trackError } = await supabase
+            .from('tracks')
+            .select('is_active, avatar_url, note, expires_at, user_id, created_at, share_type, lat, lng, privacy_mode, allowed_emails, password')
+            .eq('id', id)
+            .single();
+
         if (trackError) throw trackError;
+
+        // Privacy Check
+        if (track.privacy_mode === 'private') {
+            if (!isSignedIn) {
+                setAccessStatus('denied_privacy');
+                setLoading(false);
+                return;
+            }
+            const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+            if (!track.allowed_emails?.includes(userEmail)) {
+                setAccessStatus('denied_privacy');
+                setLoading(false);
+                return;
+            }
+        }
+
+        if (track.password) {
+            setCorrectPassword(track.password);
+            setAccessStatus('needs_password');
+        } else {
+            setAccessStatus('allowed');
+        }
+
         setIsActive(track.is_active);
         if (track.avatar_url) setAvatarUrl(track.avatar_url);
         setNote(track.note);
@@ -90,9 +126,8 @@ export default function SharedTrackScreen() {
 
         if (track.is_active) Notifications.send(track.user_id, 'New Viewer!', 'Someone is viewing your live location.', 'info');
         
-        const { data: pointsData, error: pointsError } = await supabase.from('points').select('lat, lng, timestamp').eq('track_id', id).order('timestamp', { ascending: true });
-        if (pointsError) throw pointsError;
-        setPoints(pointsData.map(p => ({ lat: p.lat, lng: p.lng, timestamp: new Date(p.timestamp).getTime() / 1000 })));
+        const { data: pointsData } = await supabase.from('points').select('lat, lng, timestamp').eq('track_id', id).order('timestamp', { ascending: true });
+        if (pointsData) setPoints(pointsData.map(p => ({ lat: p.lat, lng: p.lng, timestamp: new Date(p.timestamp).getTime() / 1000 })));
       } catch (err: any) { setError(err.message); } finally { setLoading(false); }
     };
     fetchInitialData();
@@ -105,7 +140,16 @@ export default function SharedTrackScreen() {
            setIsActive(payload.new.is_active);
     }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() }); });
     return () => { supabase.removeChannel(channel); };
-  }, [id, user]);
+  }, [id, isSignedIn, isUserLoaded]);
+
+  const checkPassword = () => {
+      if (enteredPassword === correctPassword) {
+          setAccessStatus('allowed');
+          setPasswordError(false);
+      } else {
+          setPasswordError(true);
+      }
+  };
 
   useEffect(() => {
       if (!expiresAt || !isActive) return;
@@ -120,7 +164,7 @@ export default function SharedTrackScreen() {
   }, [expiresAt, isActive]);
 
   useEffect(() => {
-    if (!id) return;
+    if (accessStatus !== 'allowed' || !id) return;
     const fetchAdHoc = async () => {
         const { data } = await supabase.from('tracks').select('id, lat, lng, avatar_url').eq('party_code', id).eq('is_active', true);
         if (data) setAdHocMembers(data.map(m => ({ id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url })));
@@ -138,7 +182,7 @@ export default function SharedTrackScreen() {
           }
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [id]);
+  }, [id, accessStatus]);
 
   useEffect(() => {
     if (!isSharing || !currentLoc || points.length === 0) return;
@@ -187,8 +231,45 @@ export default function SharedTrackScreen() {
     setIsSharing(false); setMyTrackId(null); setCurrentLoc(null);
   };
 
-  if (loading) return <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black"><ActivityIndicator size="large" color="#2563eb" /></View>;
+  if (loading || !isUserLoaded) return <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black"><ActivityIndicator size="large" color="#2563eb" /></View>;
   if (error) return <View className="flex-1 items-center justify-center p-4 bg-gray-50 dark:bg-black"><Text className="text-red-500 text-center">{error}</Text></View>;
+
+  if (accessStatus === 'denied_privacy') {
+      return (
+          <View className="flex-1 items-center justify-center p-6 bg-white dark:bg-black">
+              <Ionicons name="lock-closed" size={64} color="#ef4444" className="mb-4" />
+              <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">Access Denied</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-center mb-8">This location share is private. Only specific people can view it.</Text>
+              {!isSignedIn ? (
+                  <Button onPress={onSignInPress} className="w-full h-14"><Text className="text-white font-bold">Sign in to Check Access</Text></Button>
+              ) : (
+                  <Text className="text-gray-400 italic">Signed in as {user?.primaryEmailAddress?.emailAddress}</Text>
+              )}
+          </View>
+      );
+  }
+
+  if (accessStatus === 'needs_password') {
+      return (
+          <View className="flex-1 items-center justify-center p-6 bg-white dark:bg-black">
+              <View className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full mb-6">
+                  <Ionicons name="shield-checkmark" size={48} color="#2563eb" />
+              </View>
+              <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Password Required</Text>
+              <Text className="text-gray-500 dark:text-gray-400 text-center mb-8">This link is password protected for extra security.</Text>
+              <TextInput 
+                value={enteredPassword} 
+                onChangeText={(text) => { setEnteredPassword(text); setPasswordError(false); }} 
+                placeholder="Enter password" 
+                placeholderTextColor="#9ca3af"
+                className={`w-full bg-gray-50 dark:bg-gray-800 dark:text-white p-4 rounded-xl border mb-4 text-center text-lg ${passwordError ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}`}
+                secureTextEntry 
+              />
+              {passwordError && <Text className="text-red-500 mb-4">Incorrect password. Please try again.</Text>}
+              <Button onPress={checkPassword} className="w-full h-14"><Text className="text-white font-bold text-lg">Unlock Map</Text></Button>
+          </View>
+      );
+  }
 
   const currentPoint = points[points.length - 1];
 
@@ -218,8 +299,7 @@ export default function SharedTrackScreen() {
                 </View>
             )}
 
-            {/* Address / Current Location Overlay */}
-            {isActive && (shareType === 'address' || shareType === 'current') && (
+            {(shareType === 'address' || shareType === 'current') && (
                 <View className="absolute top-4 left-4 right-4 z-10 items-center">
                     <View className="bg-white/95 dark:bg-black/90 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-lg">
                         <View className="flex-row items-center gap-2 mb-3">
@@ -230,45 +310,16 @@ export default function SharedTrackScreen() {
                                 {shareType === 'address' ? 'Location Address' : 'Precise Coordinates'}
                             </Text>
                         </View>
-
-                        {resolvedAddress ? (
-                            <Text className={`text-gray-800 dark:text-gray-200 mb-4 leading-relaxed ${shareType === 'address' ? 'text-xl font-semibold' : 'text-sm'}`}>
-                                {resolvedAddress}
-                            </Text>
-                        ) : (
-                            <ActivityIndicator className="mb-4" color="#2563eb" />
-                        )}
-
+                        {resolvedAddress ? <Text className={`text-gray-800 dark:text-gray-200 mb-4 leading-relaxed ${shareType === 'address' ? 'text-xl font-semibold' : 'text-sm'}`}>{resolvedAddress}</Text> : <ActivityIndicator className="mb-4" color="#2563eb" />}
                         {shareType === 'current' && trackCoords && (
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl mb-4 border border-gray-100 dark:border-gray-700">
-                                <View className="flex-row justify-between mb-1">
-                                    <Text className="text-gray-500 text-xs uppercase font-bold">Latitude</Text>
-                                    <Text className="text-gray-900 dark:text-white font-monospaced">{trackCoords.lat.toFixed(6)}</Text>
-                                </View>
-                                <View className="flex-row justify-between">
-                                    <Text className="text-gray-500 text-xs uppercase font-bold">Longitude</Text>
-                                    <Text className="text-gray-900 dark:text-white font-monospaced">{trackCoords.lng.toFixed(6)}</Text>
-                                </View>
+                                <View className="flex-row justify-between mb-1"><Text className="text-gray-500 text-xs uppercase font-bold">Latitude</Text><Text className="text-gray-900 dark:text-white font-monospaced">{trackCoords.lat.toFixed(6)}</Text></View>
+                                <View className="flex-row justify-between"><Text className="text-gray-500 text-xs uppercase font-bold">Longitude</Text><Text className="text-gray-900 dark:text-white font-monospaced">{trackCoords.lng.toFixed(6)}</Text></View>
                             </View>
                         )}
-
                         <View className="flex-row gap-2">
-                            <TouchableOpacity 
-                                onPress={handleCopyAddress}
-                                className={cn(
-                                    "flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl",
-                                    copied ? "bg-green-600" : "bg-blue-600"
-                                )}
-                            >
-                                <Ionicons name={copied ? "checkmark" : "copy-outline"} size={18} color="white" />
-                                <Text className="text-white font-bold">{copied ? 'Copied!' : 'Copy Address'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${trackCoords?.lat},${trackCoords?.lng}`)}
-                                className="bg-gray-100 dark:bg-gray-800 px-4 py-3 rounded-xl"
-                            >
-                                <Ionicons name="map-outline" size={20} color={colorScheme === 'dark' ? 'white' : 'black'} />
-                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleCopyAddress} className={cn("flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl", copied ? "bg-green-600" : "bg-blue-600")}><Ionicons name={copied ? "checkmark" : "copy-outline"} size={18} color="white" /><Text className="text-white font-bold">{copied ? 'Copied!' : 'Copy Address'}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${trackCoords?.lat},${trackCoords?.lng}`)} className="bg-gray-100 dark:bg-gray-800 px-4 py-3 rounded-xl"><Ionicons name="map-outline" size={20} color={colorScheme === 'dark' ? 'white' : 'black'} /></TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -286,16 +337,9 @@ export default function SharedTrackScreen() {
 
           <View className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
               <View className="flex-row justify-between items-center mb-2">
-                <View>
-                    <Text className="text-xs font-semibold uppercase text-gray-400">Status</Text>
-                    <Text className={`text-lg font-bold ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                        {shareType === 'live' ? (isActive ? 'Tracking Live' : 'Completed') : 
-                         shareType === 'current' ? 'Fixed Point' : 'Address Pin'}
-                    </Text>
-                </View>
+                <View><Text className="text-xs font-semibold uppercase text-gray-400">Status</Text><Text className={`text-lg font-bold ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>{shareType === 'live' ? (isActive ? 'Tracking Live' : 'Completed') : shareType === 'current' ? 'Fixed Point' : 'Address Pin'}</Text></View>
                 <View className="items-end"><Text className="text-xs font-semibold uppercase text-gray-400">{shareType === 'live' ? 'Points' : 'Shared On'}</Text><Text className="text-lg font-bold text-black dark:text-white">{shareType === 'live' ? points.length : (createdAt ? new Date(createdAt).toLocaleTimeString() : '--')}</Text></View>
               </View>
-              
               <View className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 gap-4">
                  {isSharing && isActive && (
                     <View className="flex-row gap-2 flex-wrap">
