@@ -291,13 +291,24 @@ export default function HomeScreen() {
                     <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
-                          <View className="flex-row justify-between items-start">
-                              <View>
-                                  <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
-                                  <Text className="text-xl font-bold font-monospaced text-black dark:text-white">{formatDuration(duration)}</Text>
-                                  {timeLeft && <View className="flex-row items-center gap-1 mt-1"><Ionicons name="time-outline" size={10} color="#6b7280" /><Text className="text-[10px] text-gray-500 font-bold uppercase">Expires: {timeLeft}</Text></View>}
-                              </View>
-                              <View className="items-end">
+                      <View className="flex-row justify-between items-start">
+                          <View className="flex-1">
+                              <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
+                              <Text className="text-xl font-bold font-monospaced text-black dark:text-white">{formatDuration(duration)}</Text>
+                              {timeLeft && (
+                                  <View className="flex-row items-center gap-1 mt-1">
+                                      <Ionicons name="time-outline" size={10} color="#6b7280" />
+                                      <Text className="text-[10px] text-gray-500 font-bold uppercase">Expires: {timeLeft}</Text>
+                                  </View>
+                              )}
+                              {shareNote ? (
+                                <View className="flex-row items-center gap-1 mt-1">
+                                    <Ionicons name="chatbubble-outline" size={10} color="#2563eb" />
+                                    <Text className="text-[10px] text-blue-600 dark:text-blue-400 font-medium" numberOfLines={1}>{shareNote}</Text>
+                                </View>
+                              ) : null}
+                          </View>
+                          <View className="items-end">
                                   {viewerCount > 0 && <View className="bg-blue-600 px-2 py-0.5 rounded-md flex-row items-center gap-1 mb-1"><Ionicons name="eye" size={10} color="white" /><Text className="text-white text-[9px] font-bold uppercase">{viewerCount} Viewer{viewerCount !== 1 ? 's' : ''}</Text></View>}
                                   <Text className="text-xs font-semibold uppercase text-gray-400">Points</Text>
                                   <Text className="text-xl font-bold text-black dark:text-white">{points.length}</Text>
@@ -366,7 +377,13 @@ export default function HomeScreen() {
             {pastJourneys.map(journey => (
                 <Card key={journey.id} className="mb-3 p-4 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                     <View className="flex-row justify-between items-center">
-                        <View><Text className="font-semibold text-gray-800 dark:text-gray-200">{new Date(journey.created_at).toLocaleDateString()}</Text><Text className="text-xs text-gray-500">{new Date(journey.created_at).toLocaleTimeString()}</Text></View>
+                        <View className="flex-1">
+                            <Text className="font-semibold text-gray-800 dark:text-gray-200">{new Date(journey.created_at).toLocaleDateString()}</Text>
+                            <Text className="text-xs text-gray-500">{new Date(journey.created_at).toLocaleTimeString()}</Text>
+                            {journey.note && (
+                                <Text className="text-sm text-gray-600 dark:text-gray-400 mt-1 italic" numberOfLines={1}>"{journey.note}"</Text>
+                            )}
+                        </View>
                         <View className={`px-2 py-1 rounded-full ${journey.is_active ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'}`}><Text className={`text-xs font-medium ${journey.is_active ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>{journey.is_active ? 'Active' : 'Completed'}</Text></View>
                     </View>
                 </Card>
