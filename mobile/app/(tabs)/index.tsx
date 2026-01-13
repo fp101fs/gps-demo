@@ -75,8 +75,15 @@ export default function HomeScreen() {
       fetchPastJourneys();
       fetchUnreadCount();
       
-      // Demo: Send a welcome notification if none exist
-// ... (rest of the welcome effect)
+      // Send welcome notification if none exist
+      const checkAndWelcome = async () => {
+          const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+          if (count === 0) {
+              await Notifications.send(user.id, 'Welcome to GPS Demo!', 'Start tracking your journey or join a fleet to get started.', 'success');
+          }
+      };
+      checkAndWelcome();
+    }
   }, [user]);
 
   // Expiration Timer for Host
