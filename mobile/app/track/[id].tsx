@@ -1,18 +1,23 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
 import { Button } from '@/components/ui/Button';
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useOAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
+import * as Linking from 'expo-linking';
 import { useColorScheme } from 'nativewind';
+import { Notifications } from '@/lib/notifications';
+import { getDistanceFromLatLonInM } from '@/lib/utils';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SharedTrackScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, isSignedIn } = useUser();
   const { colorScheme } = useColorScheme();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
   
   const [points, setPoints] = useState<Point[]>([]);
   const [isActive, setIsActive] = useState(false);
@@ -24,8 +29,28 @@ export default function SharedTrackScreen() {
   const [isSharing, setIsSharing] = useState(false);
   const [myTrackId, setMyTrackId] = useState<string | null>(null);
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
+  const [currentLoc, setCurrentLoc] = useState<{lat: number, lng: number} | null>(null);
+
+  // Proximity State
+  const [proximityEnabled, setProximityEnabled] = useState(false);
+  const [proximityDistance, setProximityDistance] = useState('500');
+  const alertedHostRef = useRef<boolean>(false);
   
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  const onSignInPress = async () => {
+    try {
+      const { createdSessionId, setActive } = await startOAuthFlow({
+        redirectUrl: Linking.createURL(`/track/${id}`, { scheme: 'gps-demo' }),
+      });
+
+      if (createdSessionId && setActive) {
+        setActive({ session: createdSessionId });
+      }
+    } catch (err) {
+      console.error("OAuth error", err);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -169,9 +194,34 @@ export default function SharedTrackScreen() {
     };
   }, [id]);
 
+  // Proximity Alert Logic for User B (Viewer)
+  useEffect(() => {
+    if (!isSharing || !proximityEnabled || !currentLoc || points.length === 0) return;
+
+    const threshold = parseInt(proximityDistance, 10);
+    if (isNaN(threshold)) return;
+
+    const hostPoint = points[points.length - 1];
+    const dist = getDistanceFromLatLonInM(currentLoc.lat, currentLoc.lng, hostPoint.lat, hostPoint.lng);
+
+    if (dist <= threshold) {
+        if (!alertedHostRef.current) {
+            alertedHostRef.current = true;
+            Notifications.send(
+                user!.id,
+                'Proximity Alert!',
+                `You are close to the host (${Math.round(dist)}m away).`,
+                'alert'
+            );
+        }
+    } else if (dist > threshold + 100) {
+        alertedHostRef.current = false;
+    }
+  }, [currentLoc, points, proximityEnabled, proximityDistance, isSharing]);
+
   const startSharingBack = async () => {
     if (!isSignedIn || !user) {
-        Alert.alert('Sign In Required', 'You must be signed in to share your location.');
+        onSignInPress();
         return;
     }
 
@@ -188,7 +238,9 @@ export default function SharedTrackScreen() {
             is_active: true, 
             user_id: user.id,
             avatar_url: user.imageUrl,
-            party_code: id // Joining User A's party
+            party_code: id, // Joining User A's party
+            proximity_enabled: proximityEnabled,
+            proximity_meters: parseInt(proximityDistance) || 500
         }])
         .select()
         .single();
@@ -209,6 +261,7 @@ export default function SharedTrackScreen() {
         distanceInterval: 10,
       },
       async (loc) => {
+        setCurrentLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         // Update Track
         await supabase.from('tracks').update({
             lat: loc.coords.latitude,
@@ -232,6 +285,7 @@ export default function SharedTrackScreen() {
     
     setIsSharing(false);
     setMyTrackId(null);
+    setCurrentLoc(null);
   };
 
   if (loading) {
@@ -280,10 +334,38 @@ export default function SharedTrackScreen() {
             </View>
           </View>
           
-          <View className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+          <View className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 gap-4">
+             {isSharing && (
+                <View className="bg-blue-50 dark:bg-gray-800 p-3 rounded-lg border border-blue-100 dark:border-gray-700">
+                    <View className="flex-row items-center justify-between mb-2">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="radio-outline" size={20} color="#2563eb" />
+                            <Text className="text-gray-900 dark:text-white font-semibold">Proximity Alert</Text>
+                        </View>
+                        <Switch 
+                            value={proximityEnabled} 
+                            onValueChange={setProximityEnabled}
+                            trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                        />
+                    </View>
+                    {proximityEnabled && (
+                        <View className="flex-row items-center gap-2">
+                            <Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text>
+                            <TextInput 
+                                value={proximityDistance}
+                                onChangeText={setProximityDistance}
+                                keyboardType="numeric"
+                                className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
+                            />
+                            <Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text>
+                        </View>
+                    )}
+                </View>
+             )}
+
              {!isSharing ? (
                  <Button onPress={startSharingBack} variant="secondary" className="w-full">
-                     <Text className="text-blue-600 font-bold">Share My Location Back</Text>
+                     <Text className="text-blue-600 font-bold">{isSignedIn ? 'Share My Location Back' : 'Sign in to Share Back'}</Text>
                  </Button>
              ) : (
                  <Button onPress={stopSharingBack} variant="destructive" className="w-full">
