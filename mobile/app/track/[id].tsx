@@ -27,6 +27,7 @@ export default function SharedTrackScreen() {
   const [note, setNote] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
   
   // Share Back State
   const [isSharing, setIsSharing] = useState(false);
@@ -66,7 +67,7 @@ export default function SharedTrackScreen() {
         // Fetch track status and details
         const { data: track, error: trackError } = await supabase
           .from('tracks')
-          .select('is_active, avatar_url, note, expires_at, user_id')
+          .select('is_active, avatar_url, note, expires_at, user_id, created_at')
           .eq('id', id)
           .single();
 
@@ -75,6 +76,7 @@ export default function SharedTrackScreen() {
         if (track.avatar_url) setAvatarUrl(track.avatar_url);
         setNote(track.note);
         setExpiresAt(track.expires_at);
+        setCreatedAt(track.created_at);
 
         // Notify Host that someone is viewing
         if (track.is_active) {
@@ -357,7 +359,43 @@ export default function SharedTrackScreen() {
             fleetMembers={adHocMembers}
         />
 
-        {(note || timeLeft) && (
+        {/* Sharing Ended Overlay */}
+        {!isActive && (
+            <View className="absolute inset-0 bg-black/60 z-20 items-center justify-center p-6">
+                <View className="bg-white dark:bg-gray-900 w-full rounded-2xl p-6 items-center shadow-xl">
+                    <View className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center mb-4">
+                        <Ionicons name="flag" size={32} color="#6b7280" />
+                    </View>
+                    <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Sharing Ended</Text>
+                    <Text className="text-gray-500 dark:text-gray-400 text-center mb-6">
+                        This location sharing session is no longer active.
+                    </Text>
+                    
+                    <View className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6">
+                        <View className="flex-row justify-between mb-2">
+                            <Text className="text-gray-500 text-sm">Started</Text>
+                            <Text className="text-gray-900 dark:text-white text-sm font-medium">
+                                {createdAt ? new Date(createdAt).toLocaleTimeString() : '--'}
+                            </Text>
+                        </View>
+                        <View className="flex-row justify-between mb-2">
+                            <Text className="text-gray-500 text-sm">Captured Points</Text>
+                            <Text className="text-gray-900 dark:text-white text-sm font-medium">{points.length}</Text>
+                        </View>
+                        <View className="flex-row justify-between">
+                            <Text className="text-gray-500 text-sm">Status</Text>
+                            <Text className="text-red-500 text-sm font-bold uppercase">Finished</Text>
+                        </View>
+                    </View>
+
+                    <Button onPress={() => Linking.openURL(Linking.createURL('/'))} className="w-full">
+                        <Text className="text-white font-bold">Back to Home</Text>
+                    </Button>
+                </View>
+            </View>
+        )}
+
+        {(note || timeLeft) && isActive && (
             <View className="absolute top-4 left-4 right-4 z-10">
                 <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     {note && (
@@ -394,7 +432,7 @@ export default function SharedTrackScreen() {
           </View>
           
           <View className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 gap-4">
-             {isSharing && (
+             {isSharing && isActive && (
                 <View className="gap-2">
                     <View className="bg-blue-50 dark:bg-gray-800 p-3 rounded-lg border border-blue-100 dark:border-gray-700">
                         <View className="flex-row items-center justify-between mb-2">
@@ -432,11 +470,13 @@ export default function SharedTrackScreen() {
                 </View>
              )}
 
-             {!isSharing ? (
+             {isActive && !isSharing && (
                  <Button onPress={startSharingBack} variant="secondary" className="w-full">
                      <Text className="text-blue-600 font-bold">{isSignedIn ? 'Share My Location Back' : 'Sign in to Share Back'}</Text>
                  </Button>
-             ) : (
+             )}
+             
+             {isSharing && (
                  <Button onPress={stopSharingBack} variant="destructive" className="w-full">
                      <Text className="text-white font-bold">Stop Sharing My Location</Text>
                  </Button>
