@@ -13,10 +13,12 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string }[];
+  isSos?: boolean;
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
+  theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [] }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [] }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
         longitudeDelta: 0.01,
       }, 1000);
     }
-  }, [currentPoint, isReplayMode]);
+  }, [currentPoint, isReplayMode, fleetMembers]);
 
   return (
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200">
@@ -67,13 +69,14 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
             >
                 {member.avatarUrl ? (
                     <View style={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: 20, 
-                        borderWidth: 2, 
-                        borderColor: 'white', 
+                        width: member.isSos ? 60 : 40, 
+                        height: member.isSos ? 60 : 40, 
+                        borderRadius: member.isSos ? 30 : 20, 
+                        borderWidth: member.isSos ? 4 : 2, 
+                        borderColor: member.isSos ? '#ef4444' : 'white', 
                         overflow: 'hidden',
-                        backgroundColor: 'white'
+                        backgroundColor: 'white',
+                        elevation: member.isSos ? 10 : 0
                     }}>
                         <Image 
                             source={{ uri: member.avatarUrl }} 
@@ -83,7 +86,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
                 ) : (
                     <Image 
                         source={require('../assets/images/marker-green-cross.png')} 
-                        style={{ width: 40, height: 40 }} 
+                        style={{ width: member.isSos ? 60 : 40, height: member.isSos ? 60 : 40 }} 
                         resizeMode="contain"
                     />
                 )}
@@ -97,13 +100,14 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
             >
                 {avatarUrl ? (
                     <View style={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: 20, 
-                        borderWidth: 2, 
-                        borderColor: 'white', 
+                        width: isSos ? 60 : 40, 
+                        height: isSos ? 60 : 40, 
+                        borderRadius: isSos ? 30 : 20, 
+                        borderWidth: isSos ? 4 : 2, 
+                        borderColor: isSos ? '#ef4444' : 'white', 
                         overflow: 'hidden',
-                        backgroundColor: 'white'
+                        backgroundColor: 'white',
+                        elevation: isSos ? 10 : 0
                     }}>
                         <Image 
                             source={{ uri: avatarUrl }} 
@@ -113,7 +117,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
                 ) : (
                     <Image 
                         source={require('../assets/images/marker-green-cross.png')} 
-                        style={{ width: 40, height: 40 }} 
+                        style={{ width: isSos ? 60 : 40, height: isSos ? 60 : 40 }} 
                         resizeMode="contain"
                     />
                 )}

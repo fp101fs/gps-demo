@@ -26,6 +26,7 @@ export default function SharedTrackScreen() {
   
   const [points, setPoints] = useState<Point[]>([]);
   const [isActive, setIsActive] = useState(false);
+  const [isSos, setIsSos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
@@ -47,7 +48,7 @@ export default function SharedTrackScreen() {
   // Share Back State
   const [isSharing, setIsSharing] = useState(false);
   const [myTrackId, setMyTrackId] = useState<string | null>(null);
-  const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
+  const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[]>([]);
   const [currentLoc, setCurrentLoc] = useState<{lat: number, lng: number} | null>(null);
 
   const [proximityEnabled, setProximityEnabled] = useState(false);
@@ -83,7 +84,7 @@ export default function SharedTrackScreen() {
       try {
         const { data: track, error: trackError } = await supabase
             .from('tracks')
-            .select('is_active, avatar_url, note, expires_at, user_id, created_at, share_type, lat, lng, privacy_mode, allowed_emails, password')
+            .select('is_active, avatar_url, note, expires_at, user_id, created_at, share_type, lat, lng, privacy_mode, allowed_emails, password, is_sos')
             .eq('id', id)
             .single();
 
@@ -112,6 +113,7 @@ export default function SharedTrackScreen() {
         }
 
         setIsActive(track.is_active);
+        setIsSos(track.is_sos);
         if (track.avatar_url) setAvatarUrl(track.avatar_url);
         setNote(track.note);
         setExpiresAt(track.expires_at);
@@ -139,6 +141,7 @@ export default function SharedTrackScreen() {
           setPoints((prev) => [...prev, { lat: p.lat, lng: p.lng, timestamp: new Date(p.timestamp).getTime() / 1000 }]);
     }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tracks', filter: `id=eq.${id}` }, (payload) => {
            setIsActive(payload.new.is_active);
+           setIsSos(payload.new.is_sos);
     }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() }); });
     return () => { supabase.removeChannel(channel); };
   }, [id, isSignedIn, isUserLoaded]);
@@ -167,8 +170,8 @@ export default function SharedTrackScreen() {
   useEffect(() => {
     if (accessStatus !== 'allowed' || !id) return;
     const fetchAdHoc = async () => {
-        const { data } = await supabase.from('tracks').select('id, lat, lng, avatar_url').eq('party_code', id).eq('is_active', true);
-        if (data) setAdHocMembers(data.map(m => ({ id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url })));
+        const { data } = await supabase.from('tracks').select('id, lat, lng, avatar_url, is_sos').eq('party_code', id).eq('is_active', true);
+        if (data) setAdHocMembers(data.map(m => ({ id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos })));
     };
     fetchAdHoc();
     const channel = supabase.channel(`adhoc_fleet_view_${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${id}` }, (payload) => {
@@ -177,23 +180,13 @@ export default function SharedTrackScreen() {
              if (!m.is_active || m.lat === null || m.lng === null) { setAdHocMembers(prev => prev.filter(p => p.id !== m.id)); return; }
              setAdHocMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url }];
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos }];
              });
           }
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [id, accessStatus]);
-
-  // Auto-stop guest sharing if host stops
-  useEffect(() => {
-    if (!isActive && isSharing && shareType === 'live') {
-        stopSharingBack();
-        Alert.alert('Sharing Ended', 'The host has stopped sharing, so your location is no longer being shared back.');
-    }
-  }, [isActive, isSharing, shareType]);
-
-  // Proximity & Arrival Logic for Viewer
 
   useEffect(() => {
     if (!isSharing || !currentLoc || points.length === 0) return;
@@ -293,7 +286,7 @@ export default function SharedTrackScreen() {
       
       <View style={{ width: '100%', maxWidth: 1000, flex: 1 }}>
           <View className="flex-1 relative">
-            <Map currentPoint={currentPoint} points={points} avatarUrl={avatarUrl} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
+            <Map currentPoint={currentPoint} points={points} avatarUrl={avatarUrl} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
 
             {!isActive && shareType === 'live' && (
                 <View className="absolute inset-0 bg-black/60 z-20 items-center justify-center p-6">
@@ -306,6 +299,16 @@ export default function SharedTrackScreen() {
                             <View className="flex-row justify-between"><Text className="text-gray-500 text-sm">Points</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{points.length}</Text></View>
                         </View>
                         <Button onPress={() => router.replace('/')} className="w-full"><Text className="text-white font-bold">Back to Home</Text></Button>
+                    </View>
+                </View>
+            )}
+
+            {isSos && isActive && (
+                <View className="absolute top-20 left-4 right-4 z-30 bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
+                    <Ionicons name="warning" size={28} color="white" />
+                    <View className="flex-1">
+                        <Text className="text-white font-black text-lg uppercase">Emergency SOS!</Text>
+                        <Text className="text-white font-medium text-xs">The host has triggered an emergency alert!</Text>
                     </View>
                 </View>
             )}

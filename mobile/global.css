@@ -21,6 +21,20 @@
   justify-content: center !important;
 }
 
+@keyframes pulse-sos {
+  0% { transform: scale(1); filter: sepia(100%) saturate(1000%) hue-rotate(-50deg) brightness(100%); }
+  50% { transform: scale(1.2); filter: sepia(100%) saturate(2000%) hue-rotate(-50deg) brightness(120%); }
+  100% { transform: scale(1); filter: sepia(100%) saturate(1000%) hue-rotate(-50deg) brightness(100%); }
+}
+
+.marker-pulse-sos {
+  animation: pulse-sos 1s infinite ease-in-out;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 999 !important;
+}
+
 /* Foolproof Leaflet Reset */
 .leaflet-container img.leaflet-marker-icon {
   max-width: none !important;

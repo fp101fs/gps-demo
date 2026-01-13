@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import Map from '@/components/Map';
 import { useColorScheme } from 'nativewind';
+import { Ionicons } from '@expo/vector-icons';
 
 interface FleetMember {
   id: string;
@@ -12,6 +13,7 @@ interface FleetMember {
   lng: number;
   avatarUrl?: string;
   user_id: string;
+  isSos?: boolean;
 }
 
 export default function FleetScreen() {
@@ -29,7 +31,7 @@ export default function FleetScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tracks')
-        .select('id, lat, lng, avatar_url, user_id')
+        .select('id, lat, lng, avatar_url, user_id, is_sos')
         .eq('party_code', activeCode)
         .eq('is_active', true)
         .not('lat', 'is', null)
@@ -43,7 +45,8 @@ export default function FleetScreen() {
             lat: m.lat,
             lng: m.lng,
             avatarUrl: m.avatar_url,
-            user_id: m.user_id
+            user_id: m.user_id,
+            isSos: m.is_sos
         })));
       }
       setLoading(false);
@@ -72,14 +75,15 @@ export default function FleetScreen() {
              setMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
                  if (exists) {
-                     return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url } : p);
+                     return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos } : p);
                  } else {
                      return [...prev, {
                         id: m.id,
                         lat: m.lat,
                         lng: m.lng,
                         avatarUrl: m.avatar_url,
-                        user_id: m.user_id
+                        user_id: m.user_id,
+                        isSos: m.is_sos
                      }];
                  }
              });
@@ -92,6 +96,8 @@ export default function FleetScreen() {
       supabase.removeChannel(channel);
     };
   }, [activeCode]);
+
+  const sosMembers = members.filter(m => m.isSos);
 
   return (
     <View className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
@@ -115,15 +121,29 @@ export default function FleetScreen() {
         </View>
       ) : (
         <View className="flex-1">
-            <View className="absolute top-12 left-4 right-4 z-10 flex-row gap-2">
-                 <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
-                     <Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text>
-                     <Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text>
-                     <Text className="text-xs text-blue-600 dark:text-blue-400">{members.length} family members online</Text>
+            <View className="absolute top-12 left-4 right-4 z-10 gap-2">
+                 <View className="flex-row gap-2">
+                    <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
+                        <Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text>
+                        <Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text>
+                        <Text className="text-xs text-blue-600 dark:text-blue-400">{members.length} members online</Text>
+                    </View>
+                    <Button variant="destructive" className="h-full" onPress={() => { setActiveCode(null); setMembers([]); }}>
+                        <Text className="text-white font-bold">Exit</Text>
+                    </Button>
                  </View>
-                 <Button variant="destructive" className="h-full" onPress={() => { setActiveCode(null); setMembers([]); }}>
-                     <Text className="text-white font-bold">Exit</Text>
-                 </Button>
+
+                 {sosMembers.length > 0 && (
+                     <View className="bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
+                         <Ionicons name="warning" size={28} color="white" />
+                         <View className="flex-1">
+                             <Text className="text-white font-black text-lg uppercase">Emergency SOS!</Text>
+                             <Text className="text-white font-medium text-xs">
+                                 {sosMembers.length} member{sosMembers.length > 1 ? 's' : ''} triggered an alert!
+                             </Text>
+                         </View>
+                     </View>
+                 )}
             </View>
             
             <Map 

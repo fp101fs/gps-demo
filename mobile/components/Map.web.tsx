@@ -20,11 +20,12 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string }[];
+  isSos?: boolean;
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
   theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fleetMembers = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], theme = 'light' }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -34,34 +35,40 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
   const [isReady, setIsReady] = useState(false);
 
   // Helper to create the correct icon
-  const createIcon = (url?: string) => {
+  const createIcon = (url?: string, memberIsSos?: boolean) => {
+    const size = memberIsSos ? 80 : 40;
+    const radius = size / 2;
+    const border = memberIsSos ? '4px solid #ef4444' : '2px solid white';
+    const shadow = memberIsSos ? '0 0 20px #ef4444' : '0 2px 5px rgba(0,0,0,0.3)';
+    const animationClass = memberIsSos ? 'marker-pulse-sos' : 'marker-pulse';
+
     if (url) {
       return L.divIcon({
-        className: 'marker-pulse',
+        className: animationClass,
         html: `
           <div style="
-            width: 40px; 
-            height: 40px; 
-            border-radius: 20px; 
-            border: 2px solid white; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            width: ${size}px; 
+            height: ${size}px; 
+            border-radius: ${radius}px; 
+            border: ${border}; 
+            box-shadow: ${shadow};
             overflow: hidden;
             background-color: white;
           ">
             <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" />
           </div>
         `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
+        iconSize: [size, size],
+        iconAnchor: [radius, radius],
       });
     }
 
     return L.icon({
       iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
-      popupAnchor: [0, -20],
-      className: ''
+      iconSize: [size, size],
+      iconAnchor: [radius, radius],
+      popupAnchor: [0, -radius],
+      className: animationClass
     });
   };
 
@@ -130,7 +137,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
     const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
         latLngs.push([member.lat, member.lng]);
-        const icon = createIcon(member.avatarUrl);
+        const icon = createIcon(member.avatarUrl, member.isSos);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
             fleetMarkersRef.current[member.id].setIcon(icon);
@@ -147,31 +154,23 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, fle
     }
   }, [fleetMembers, currentPoint]);
 
-  // Handle Marker Updates (including avatar change)
+  // Handle Marker Updates (including avatar/SOS change)
   useEffect(() => {
-    if (!mapRef.current || !L) return;
+    if (!mapRef.current || !currentPoint || !L) return;
 
-    if (currentPoint) {
-        const icon = createIcon(avatarUrl);
+    const icon = createIcon(avatarUrl, isSos);
 
-        if (!markerRef.current) {
-          markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
-        } else {
-          markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
-          markerRef.current.setIcon(icon);
-        }
-    
-        if (!isReplayMode) {
-          mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
-        }
+    if (!markerRef.current) {
+      markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
     } else {
-        // If currentPoint is removed, remove the marker
-        if (markerRef.current) {
-            mapRef.current.removeLayer(markerRef.current);
-            markerRef.current = null;
-        }
+      markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
+      markerRef.current.setIcon(icon);
     }
-  }, [currentPoint, isReplayMode, avatarUrl]);
+
+    if (!isReplayMode) {
+      mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
+    }
+  }, [currentPoint, isReplayMode, avatarUrl, isSos]);
 
   useEffect(() => {
     if (!mapRef.current || !L) return;

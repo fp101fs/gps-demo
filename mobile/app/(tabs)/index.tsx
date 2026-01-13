@@ -55,6 +55,7 @@ export default function HomeScreen() {
   const [currentExpiresAt, setCurrentExpiresAt] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isSos, setIsSos] = useState(false);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -271,6 +272,24 @@ export default function HomeScreen() {
     } catch (globalErr) { setIsStarting(false); Alert.alert('Error', 'Unexpected error occurred.'); }
   };
 
+  const toggleSos = async () => {
+      if (!trackId) return;
+      const newSosState = !isSos;
+      
+      try {
+          const { error } = await supabase.from('tracks').update({ is_sos: newSosState }).eq('id', trackId);
+          if (error) throw error;
+          
+          setIsSos(newSosState);
+          
+          if (newSosState) {
+              Alert.alert('SOS Triggered', 'Your family circle has been notified.');
+          }
+      } catch (e) {
+          Alert.alert('Error', 'Failed to update SOS status.');
+      }
+  };
+
   const stopTracking = async () => {
     if (locationSubscription.current) { try { locationSubscription.current.remove(); } catch(e) {} locationSubscription.current = null; }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -369,7 +388,7 @@ export default function HomeScreen() {
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View style={{ height: isLargeScreen ? 450 : 256 }} className="bg-gray-100 dark:bg-gray-800">
-                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
+                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">
@@ -464,6 +483,19 @@ export default function HomeScreen() {
                                 {arrivalEnabled && <View className="flex-row items-center gap-2"><Text className="text-gray-600 dark:text-gray-400 text-sm">Alert @</Text><TextInput value={arrivalDistance} onChangeText={setArrivalDistance} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text></View>}
                             </View>
                             <Button onPress={stopTracking} variant="destructive" className="w-full"><Text className="text-white font-bold">Stop Tracking</Text></Button>
+                            
+                            <TouchableOpacity 
+                                onPress={toggleSos}
+                                className={cn(
+                                    "w-full py-4 rounded-xl flex-row items-center justify-center gap-2 border-2",
+                                    isSos ? "bg-white dark:bg-black border-red-600" : "bg-red-600 border-red-600"
+                                )}
+                            >
+                                <Ionicons name="warning" size={24} color={isSos ? "#dc2626" : "white"} />
+                                <Text className={cn("font-black text-lg uppercase", isSos ? "text-red-600" : "text-white")}>
+                                    {isSos ? 'Cancel SOS Alert' : 'Safety SOS'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
                     )}
                 </CardContent>
