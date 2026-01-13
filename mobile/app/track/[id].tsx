@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, Linking, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, Linking, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
@@ -66,13 +66,16 @@ export default function SharedTrackScreen() {
         setExpiresAt(track.expires_at);
         setCreatedAt(track.created_at);
         setShareType(track.share_type);
+        
         if (track.is_active) Notifications.send(track.user_id, 'New Viewer!', 'Someone is viewing your live location.', 'info');
+        
         const { data: pointsData, error: pointsError } = await supabase.from('points').select('lat, lng, timestamp').eq('track_id', id).order('timestamp', { ascending: true });
         if (pointsError) throw pointsError;
         setPoints(pointsData.map(p => ({ lat: p.lat, lng: p.lng, timestamp: new Date(p.timestamp).getTime() / 1000 })));
       } catch (err: any) { setError(err.message); } finally { setLoading(false); }
     };
     fetchInitialData();
+    
     const channel = supabase.channel(`track_updates_${id}`, { config: { presence: { key: user?.id || 'guest' } } });
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'points', filter: `track_id=eq.${id}` }, (payload) => {
           const p = payload.new;
@@ -172,7 +175,30 @@ export default function SharedTrackScreen() {
             <Map currentPoint={currentPoint} points={points} avatarUrl={avatarUrl} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
 
             {!isActive && shareType === 'live' && (
-// ...
+                <View className="absolute inset-0 bg-black/60 z-20 items-center justify-center p-6">
+                    <View className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 items-center shadow-xl">
+                        <View className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center mb-4"><Ionicons name="flag" size={32} color="#6b7280" /></View>
+                        <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Sharing Ended</Text>
+                        <Text className="text-gray-500 dark:text-gray-400 text-center mb-6">This session is no longer active.</Text>
+                        <View className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6">
+                            <View className="flex-row justify-between mb-2"><Text className="text-gray-500 text-sm">Started</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{createdAt ? new Date(createdAt).toLocaleTimeString() : '--'}</Text></View>
+                            <View className="flex-row justify-between"><Text className="text-gray-500 text-sm">Points</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{points.length}</Text></View>
+                        </View>
+                        <Button onPress={() => Linking.openURL(Linking.createURL('/'))} className="w-full"><Text className="text-white font-bold">Back to Home</Text></Button>
+                    </View>
+                </View>
+            )}
+
+            {(note || timeLeft) && isActive && (
+                <View className="absolute top-4 left-4 right-4 z-10 items-center">
+                    <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full max-w-md">
+                        {note && <View className="flex-row items-center gap-2 mb-1"><Ionicons name="chatbubble-outline" size={16} color="#2563eb" /><Text className="text-gray-900 dark:text-white font-medium flex-1">{note}</Text></View>}
+                        {timeLeft && <View className="flex-row items-center gap-2"><Ionicons name="time-outline" size={16} color="#6b7280" /><Text className="text-gray-500 dark:text-gray-400 text-xs">{timeLeft === 'Expired' ? 'Sharing has ended' : `Expires in: ${timeLeft}`}</Text></View>}
+                    </View>
+                </View>
+            )}
+          </View>
+
           <View className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
               <View className="flex-row justify-between items-center mb-2">
                 <View>
