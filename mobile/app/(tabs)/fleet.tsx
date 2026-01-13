@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import Map from '@/components/Map';
+import { useColorScheme } from 'nativewind';
 
 interface FleetMember {
   id: string;
@@ -15,6 +16,7 @@ interface FleetMember {
 
 export default function FleetScreen() {
   const insets = useSafeAreaInsets();
+  const { colorScheme } = useColorScheme();
   const [fleetCode, setFleetCode] = useState('');
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [members, setMembers] = useState<FleetMember[]>([]);
@@ -95,17 +97,18 @@ export default function FleetScreen() {
   }, [activeCode]);
 
   return (
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
       {!activeCode ? (
         <View className="flex-1 p-4 justify-center">
-             <Text className="text-2xl font-bold mb-2">Join a Fleet</Text>
-             <Text className="text-gray-500 mb-6">Enter a code to view all active members on the map.</Text>
+             <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join a Fleet</Text>
+             <Text className="text-gray-500 dark:text-gray-400 mb-6">Enter a code to view all active members on the map.</Text>
              
              <TextInput 
                 value={fleetCode}
                 onChangeText={setFleetCode}
                 placeholder="Enter Fleet Code"
-                className="bg-gray-100 p-4 rounded-xl border border-gray-200 mb-4 text-lg"
+                placeholderTextColor="#9ca3af"
+                className="bg-gray-100 dark:bg-gray-800 dark:text-white p-4 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 text-lg"
                 autoCapitalize="none"
              />
              
@@ -116,10 +119,10 @@ export default function FleetScreen() {
       ) : (
         <View className="flex-1">
             <View className="absolute top-12 left-4 right-4 z-10 flex-row gap-2">
-                 <View className="flex-1 bg-white/90 p-3 rounded-xl border border-gray-200 shadow-sm backdrop-blur-md">
+                 <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
                      <Text className="text-xs font-bold text-gray-500 uppercase">Fleet Active</Text>
-                     <Text className="text-lg font-bold">#{activeCode}</Text>
-                     <Text className="text-xs text-blue-600">{members.length} members online</Text>
+                     <Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text>
+                     <Text className="text-xs text-blue-600 dark:text-blue-400">{members.length} members online</Text>
                  </View>
                  <Button variant="destructive" className="h-full" onPress={() => { setActiveCode(null); setMembers([]); }}>
                      <Text className="text-white font-bold">Exit</Text>
@@ -129,6 +132,7 @@ export default function FleetScreen() {
             <Map 
                 points={[]} 
                 fleetMembers={members} 
+                theme={colorScheme as 'light' | 'dark'}
             />
         </View>
       )}

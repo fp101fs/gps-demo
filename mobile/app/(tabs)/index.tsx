@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
+import { useColorScheme } from 'nativewind';
 
 // Types
 interface Journey {
@@ -24,6 +25,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   const { signOut } = useAuth();
+  const { colorScheme } = useColorScheme();
   
   const [isTracking, setIsTracking] = useState(false);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
@@ -220,53 +222,58 @@ export default function HomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         
         {/* Header */}
         <View className="mb-6 flex-row items-center justify-between">
           <View>
-            <Text className="text-3xl font-bold text-gray-900">GPS Tracker</Text>
-            <Text className="text-gray-500">
+            <Text className="text-3xl font-bold text-gray-900 dark:text-white">GPS Tracker</Text>
+            <Text className="text-gray-500 dark:text-gray-400">
                {isTracking ? '🟢 Tracking Active' : 'Ready to start'}
             </Text>
           </View>
           <View className="flex-row gap-2">
             {isTracking && (
                 <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
-                    <Text className={copied ? "text-green-600" : "text-blue-600"}>
+                    <Text className={copied ? "text-green-600" : "text-blue-600 dark:text-blue-400"}>
                         {copied ? 'Copied!' : 'Share'}
                     </Text>
                 </Button>
             )}
             {user && (
                 <Button variant="ghost" size="sm" onPress={() => signOut()}>
-                    <Text className="text-blue-600">Sign Out</Text>
+                    <Text className="text-blue-600 dark:text-blue-400">Sign Out</Text>
                 </Button>
             )}
           </View>
         </View>
 
         {/* Tracking Card */}
-        <Card className="mb-6 overflow-hidden">
+        <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
             {/* Map Container - Height is fixed */}
-            <View className="h-64 bg-gray-100">
-                <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} />
+            <View className="h-64 bg-gray-100 dark:bg-gray-800">
+                <Map 
+                    currentPoint={currentPoint} 
+                    points={points} 
+                    avatarUrl={useProfileIcon ? user?.imageUrl : undefined} 
+                    theme={colorScheme as 'light' | 'dark'}
+                />
                 
                 {/* Overlay Stats (iOS Style Blur) */}
                 {isTracking && (
-                  <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 shadow-sm border border-gray-200 p-3">
+                  <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between">
                           <View>
                               <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
-                              <Text className="text-xl font-bold font-monospaced">{formatDuration(duration)}</Text>
+                              <Text className="text-xl font-bold font-monospaced text-black dark:text-white">{formatDuration(duration)}</Text>
                           </View>
                           <View className="items-end">
                               <Text className="text-xs font-semibold uppercase text-gray-400">Points</Text>
-                              <Text className="text-xl font-bold">{points.length}</Text>
+                              <Text className="text-xl font-bold text-black dark:text-white">{points.length}</Text>
                           </View>
                       </View>
-                      <View className="mt-2 border-t border-gray-100 pt-2">
+                      <View className="mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">
                         <Text className="text-xs text-gray-500" numberOfLines={1}>{address}</Text>
                       </View>
                   </View>
@@ -276,14 +283,14 @@ export default function HomeScreen() {
             <CardContent className="pt-6">
                 {!isTracking ? (
                     <View className="gap-4">
-                        <View className="flex-row items-center justify-between bg-gray-50 p-3 rounded-lg">
+                        <View className="flex-row items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                             <View className="flex-row items-center gap-3">
                                 {user?.imageUrl ? (
                                     <Image source={{ uri: user.imageUrl }} className="w-8 h-8 rounded-full" />
                                 ) : (
                                     <View className="w-8 h-8 rounded-full bg-gray-300" />
                                 )}
-                                <Text className="text-gray-700 font-medium">Use Profile Picture</Text>
+                                <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
                             </View>
                             <Switch 
                                 value={useProfileIcon} 
@@ -292,13 +299,14 @@ export default function HomeScreen() {
                             />
                         </View>
                         
-                        <View className="bg-gray-50 p-3 rounded-lg">
+                        <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                              <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
                              <TextInput 
                                 value={fleetCode}
                                 onChangeText={setFleetCode}
                                 placeholder="e.g. 'bachelor-party'"
-                                className="bg-white p-2 rounded border border-gray-200"
+                                placeholderTextColor="#9ca3af"
+                                className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600"
                                 autoCapitalize="none"
                              />
                         </View>
@@ -316,20 +324,20 @@ export default function HomeScreen() {
         </Card>
 
         {/* History Section */}
-        <Text className="mb-3 text-lg font-semibold text-gray-900">Recent Journeys</Text>
+        <Text className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Recent Journeys</Text>
         {pastJourneys.map(journey => (
-            <Card key={journey.id} className="mb-3 p-4">
+            <Card key={journey.id} className="mb-3 p-4 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View className="flex-row justify-between items-center">
                     <View>
-                        <Text className="font-semibold text-gray-800">
+                        <Text className="font-semibold text-gray-800 dark:text-gray-200">
                             {new Date(journey.created_at).toLocaleDateString()}
                         </Text>
                         <Text className="text-xs text-gray-500">
                             {new Date(journey.created_at).toLocaleTimeString()}
                         </Text>
                     </View>
-                    <View className={`px-2 py-1 rounded-full ${journey.is_active ? 'bg-green-100' : 'bg-gray-100'}`}>
-                        <Text className={`text-xs font-medium ${journey.is_active ? 'text-green-700' : 'text-gray-600'}`}>
+                    <View className={`px-2 py-1 rounded-full ${journey.is_active ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                        <Text className={`text-xs font-medium ${journey.is_active ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>
                             {journey.is_active ? 'Active' : 'Completed'}
                         </Text>
                     </View>
