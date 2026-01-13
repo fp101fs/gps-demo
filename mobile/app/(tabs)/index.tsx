@@ -473,9 +473,9 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* Share Settings Modal */}
-      <Modal visible={shareModalVisible} transparent={true} animationType="slide" onRequestClose={() => setShareModalVisible(false)}>
-        <View className="flex-1 justify-end bg-black/50">
-            <View className="bg-white dark:bg-gray-900 p-6 rounded-t-3xl shadow-xl w-full max-w-2xl mx-auto">
+      <Modal visible={shareModalVisible} transparent={true} animationType="fade" onRequestClose={() => setShareModalVisible(false)}>
+        <View className="flex-1 justify-center items-center bg-black/50 p-4">
+            <View className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-xl w-full max-w-2xl mx-auto">
                 <View className="flex-row justify-between items-center mb-6">
                     <Text className="text-xl font-bold text-gray-900 dark:text-white">Share Settings</Text>
                     <TouchableOpacity onPress={() => setShareModalVisible(false)}><Ionicons name="close" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} /></TouchableOpacity>
