@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase';
+import { Notifications } from '@/lib/notifications';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
 import { useColorScheme } from 'nativewind';
+import { Ionicons } from '@expo/vector-icons';
 
 // Types
 interface Journey {
@@ -23,6 +26,7 @@ interface Journey {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useUser();
   const { signOut } = useAuth();
   const { colorScheme } = useColorScheme();
@@ -38,6 +42,7 @@ export default function HomeScreen() {
   const [useProfileIcon, setUseProfileIcon] = useState(false);
   const [fleetCode, setFleetCode] = useState('');
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -47,8 +52,38 @@ export default function HomeScreen() {
   useEffect(() => {
     if (user) {
       fetchPastJourneys();
+      fetchUnreadCount();
+      
+      // Demo: Send a welcome notification if none exist
+      // In a real app, this would be done by a backend trigger
+      const checkAndWelcome = async () => {
+          const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+          if (count === 0) {
+              await Notifications.send(user.id, 'Welcome to GPS Demo!', 'Start tracking your journey or join a fleet to get started.', 'success');
+          }
+      };
+      checkAndWelcome();
     }
   }, [user]);
+
+  const fetchUnreadCount = async () => {
+      if (!user) return;
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      
+      setUnreadCount(count || 0);
+      
+      // Subscribe to count changes
+      const channel = supabase.channel('unread_count')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, 
+            () => setUnreadCount(c => c + 1))
+        .subscribe();
+        
+      return () => supabase.removeChannel(channel);
+  };
 
   // Subscribe to Ad-hoc Fleet (people sharing back to my trackId)
   useEffect(() => {
@@ -282,7 +317,17 @@ export default function HomeScreen() {
                {isTracking ? '🟢 Tracking Active' : 'Ready to start'}
             </Text>
           </View>
-          <View className="flex-row gap-2">
+          <View className="flex-row gap-2 items-center">
+            {/* Notification Bell */}
+            <TouchableOpacity onPress={() => router.push('/notifications')} className="mr-2 relative">
+                <Ionicons name="notifications-outline" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} />
+                {unreadCount > 0 && (
+                    <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full justify-center items-center">
+                        <Text className="text-white text-[10px] font-bold">{unreadCount}</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+
             {isTracking && (
                 <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
                     <Text className={copied ? "text-green-600" : "text-blue-600 dark:text-blue-400"}>
