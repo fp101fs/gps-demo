@@ -29,6 +29,7 @@ export default function SharedTrackScreen() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [shareType, setShareType] = useState<string | null>(null);
   
   const [isSharing, setIsSharing] = useState(false);
   const [myTrackId, setMyTrackId] = useState<string | null>(null);
@@ -57,13 +58,14 @@ export default function SharedTrackScreen() {
     if (!id) return;
     const fetchInitialData = async () => {
       try {
-        const { data: track, error: trackError } = await supabase.from('tracks').select('is_active, avatar_url, note, expires_at, user_id, created_at').eq('id', id).single();
+        const { data: track, error: trackError } = await supabase.from('tracks').select('is_active, avatar_url, note, expires_at, user_id, created_at, share_type').eq('id', id).single();
         if (trackError) throw trackError;
         setIsActive(track.is_active);
         if (track.avatar_url) setAvatarUrl(track.avatar_url);
         setNote(track.note);
         setExpiresAt(track.expires_at);
         setCreatedAt(track.created_at);
+        setShareType(track.share_type);
         if (track.is_active) Notifications.send(track.user_id, 'New Viewer!', 'Someone is viewing your live location.', 'info');
         const { data: pointsData, error: pointsError } = await supabase.from('points').select('lat, lng, timestamp').eq('track_id', id).order('timestamp', { ascending: true });
         if (pointsError) throw pointsError;
@@ -160,41 +162,27 @@ export default function SharedTrackScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black items-center">
-      <Stack.Screen options={{ title: isActive ? '🔴 Live Journey' : 'Past Journey' }} />
+      <Stack.Screen options={{ 
+          title: shareType === 'live' ? (isActive ? '🔴 Live Journey' : 'Past Journey') : 
+                 shareType === 'current' ? '📍 Pinned Location' : '🏠 Shared Address' 
+      }} />
       
       <View style={{ width: '100%', maxWidth: 1000, flex: 1 }}>
           <View className="flex-1 relative">
             <Map currentPoint={currentPoint} points={points} avatarUrl={avatarUrl} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} />
 
-            {!isActive && (
-                <View className="absolute inset-0 bg-black/60 z-20 items-center justify-center p-6">
-                    <View className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-2xl p-6 items-center shadow-xl">
-                        <View className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full items-center justify-center mb-4"><Ionicons name="flag" size={32} color="#6b7280" /></View>
-                        <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Sharing Ended</Text>
-                        <Text className="text-gray-500 dark:text-gray-400 text-center mb-6">This session is no longer active.</Text>
-                        <View className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6">
-                            <View className="flex-row justify-between mb-2"><Text className="text-gray-500 text-sm">Started</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{createdAt ? new Date(createdAt).toLocaleTimeString() : '--'}</Text></View>
-                            <View className="flex-row justify-between"><Text className="text-gray-500 text-sm">Points</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{points.length}</Text></View>
-                        </View>
-                        <Button onPress={() => Linking.openURL(Linking.createURL('/'))} className="w-full"><Text className="text-white font-bold">Back to Home</Text></Button>
-                    </View>
-                </View>
-            )}
-
-            {(note || timeLeft) && isActive && (
-                <View className="absolute top-4 left-4 right-4 z-10 items-center">
-                    <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full max-w-md">
-                        {note && <View className="flex-row items-center gap-2 mb-1"><Ionicons name="chatbubble-outline" size={16} color="#2563eb" /><Text className="text-gray-900 dark:text-white font-medium flex-1">{note}</Text></View>}
-                        {timeLeft && <View className="flex-row items-center gap-2"><Ionicons name="time-outline" size={16} color="#6b7280" /><Text className="text-gray-500 dark:text-gray-400 text-xs">{timeLeft === 'Expired' ? 'Sharing has ended' : `Expires in: ${timeLeft}`}</Text></View>}
-                    </View>
-                </View>
-            )}
-          </View>
-
+            {!isActive && shareType === 'live' && (
+// ...
           <View className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
               <View className="flex-row justify-between items-center mb-2">
-                <View><Text className="text-xs font-semibold uppercase text-gray-400">Status</Text><Text className={`text-lg font-bold ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>{isActive ? 'Tracking Live' : 'Completed'}</Text></View>
-                <View className="items-end"><Text className="text-xs font-semibold uppercase text-gray-400">Points</Text><Text className="text-lg font-bold text-black dark:text-white">{points.length}</Text></View>
+                <View>
+                    <Text className="text-xs font-semibold uppercase text-gray-400">Status</Text>
+                    <Text className={`text-lg font-bold ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                        {shareType === 'live' ? (isActive ? 'Tracking Live' : 'Completed') : 
+                         shareType === 'current' ? 'Fixed Point' : 'Address Pin'}
+                    </Text>
+                </View>
+                <View className="items-end"><Text className="text-xs font-semibold uppercase text-gray-400">{shareType === 'live' ? 'Points' : 'Shared On'}</Text><Text className="text-lg font-bold text-black dark:text-white">{shareType === 'live' ? points.length : (createdAt ? new Date(createdAt).toLocaleTimeString() : '--')}</Text></View>
               </View>
               
               <View className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 gap-4">

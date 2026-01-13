@@ -55,6 +55,7 @@ export default function HomeScreen() {
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
   const [shareNote, setShareNote] = useState('');
+  const [shareType, setShareType] = useState<'live' | 'current' | 'address'>('live');
 
   const [proximityEnabled, setProximityEnabled] = useState(false);
   const [proximityDistance, setProximityDistance] = useState('500');
@@ -185,20 +186,59 @@ export default function HomeScreen() {
     else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
 
     const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
+    
+    let finalNote = shareNote;
+    let initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    
+    if (shareType === 'address') {
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${initialLocation.coords.latitude}&lon=${initialLocation.coords.longitude}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+            const addr = data.display_name;
+            if (addr) finalNote = (shareNote ? shareNote + " - " : "") + addr;
+        } catch (e) {}
+    }
+
     const { data: track, error } = await supabase.from('tracks').insert([{ 
-        is_active: true, user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
-        party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
-        arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
-        expires_at: expiresAt, note: shareNote || null
+        is_active: shareType === 'live', 
+        user_id: user.id, 
+        avatar_url: useProfileIcon ? user.imageUrl : null, 
+        party_code: fleetCode || null, 
+        proximity_enabled: proximityEnabled, 
+        proximity_meters: parseInt(proximityDistance) || 500,
+        arrival_enabled: arrivalEnabled, 
+        arrival_meters: parseInt(arrivalDistance) || 50,
+        expires_at: shareType === 'live' ? expiresAt : null, 
+        note: finalNote || null,
+        share_type: shareType,
+        lat: initialLocation.coords.latitude,
+        lng: initialLocation.coords.longitude
     }]).select().single();
 
     if (error) return Alert.alert('Error', 'Could not start tracking.');
     
+    // Add initial point
+    await supabase.from('points').insert([{ 
+        track_id: track.id, 
+        lat: initialLocation.coords.latitude, 
+        lng: initialLocation.coords.longitude, 
+        timestamp: new Date().toISOString() 
+    }]);
+
+    if (shareType !== 'live') {
+        const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${track.id}`;
+        await Clipboard.setStringAsync(url);
+        Alert.alert('Location Shared', `Your ${shareType} location link has been copied to clipboard.`);
+        fetchPastJourneys();
+        return;
+    }
+
     setTrackId(track.id);
     setCurrentExpiresAt(expiresAt);
     setIsTracking(true);
     startTimeRef.current = Date.now();
-    setPoints([]);
+    setPoints([{ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 }]);
+    setCurrentPoint({ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 });
     
     timerRef.current = setInterval(() => {
       if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -329,17 +369,50 @@ export default function HomeScreen() {
                                 </View>
                                 <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
                             </View>
+
+                            {/* Share Type Selector */}
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
-                                 <View className="flex-row gap-2 mb-2">
-                                    {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
-                                        <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
-                                            <Text className={cn("text-xs font-bold", durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300")}>{opt}</Text>
+                                <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
+                                <View className="flex-row gap-2">
+                                    {(['live', 'current', 'address'] as const).map((type) => (
+                                        <TouchableOpacity 
+                                            key={type}
+                                            onPress={() => setShareType(type)}
+                                            className={cn(
+                                                "flex-1 py-2 rounded-md border items-center",
+                                                shareType === type 
+                                                    ? "bg-blue-600 border-blue-600" 
+                                                    : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600"
+                                            )}
+                                        >
+                                            <Text className={cn(
+                                                "text-[10px] font-bold uppercase",
+                                                shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300"
+                                            )}>{type}</Text>
                                         </TouchableOpacity>
                                     ))}
-                                 </View>
-                                 {durationOption === 'Custom' && <View className="flex-row items-center gap-2 mb-2"><TextInput value={customDuration} onChangeText={setCustomDuration} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-500 text-xs">minutes</Text></View>}
+                                </View>
+                                <Text className="text-[10px] text-gray-400 mt-2 italic">
+                                    {shareType === 'live' ? "Viewers see your location update in real-time." : 
+                                     shareType === 'current' ? "Share your exact coordinate once." : 
+                                     "Share your nearest street address once."}
+                                </Text>
                             </View>
+                            
+                            {/* Expiration Settings */}
+                            {shareType === 'live' && (
+                                <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                     <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
+                                     <View className="flex-row gap-2 mb-2">
+                                        {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
+                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                                <Text className={cn("text-xs font-bold", durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300")}>{opt}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                     </View>
+                                     {durationOption === 'Custom' && <View className="flex-row items-center gap-2 mb-2"><TextInput value={customDuration} onChangeText={setCustomDuration} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-500 text-xs">minutes</Text></View>}
+                                </View>
+                            )}
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                  <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Add a Note (Optional)</Text>
                                  <TextInput value={shareNote} onChangeText={setShareNote} placeholder="e.g. 'Meeting at the park!'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />
