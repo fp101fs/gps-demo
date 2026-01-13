@@ -24,6 +24,9 @@ export default function SharedTrackScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [note, setNote] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
   
   // Share Back State
   const [isSharing, setIsSharing] = useState(false);
@@ -34,7 +37,10 @@ export default function SharedTrackScreen() {
   // Proximity State
   const [proximityEnabled, setProximityEnabled] = useState(false);
   const [proximityDistance, setProximityDistance] = useState('500');
+  const [arrivalEnabled, setArrivalEnabled] = useState(false);
+  const [arrivalDistance, setArrivalDistance] = useState('50');
   const alertedHostRef = useRef<boolean>(false);
+  const arrivedHostRef = useRef<boolean>(false);
   
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
@@ -60,13 +66,25 @@ export default function SharedTrackScreen() {
         // Fetch track status and avatar
         const { data: track, error: trackError } = await supabase
           .from('tracks')
-          .select('is_active, avatar_url')
+          .select('is_active, avatar_url, note, expires_at, user_id')
           .eq('id', id)
           .single();
 
         if (trackError) throw trackError;
         setIsActive(track.is_active);
         if (track.avatar_url) setAvatarUrl(track.avatar_url);
+        setNote(track.note);
+        setExpiresAt(track.expires_at);
+
+        // Notify Host that someone is viewing
+        if (track.is_active) {
+            Notifications.send(
+                track.user_id,
+                'New Viewer!',
+                'Someone is currently viewing your live location.',
+                'info'
+            );
+        }
 
         // Fetch existing points
         const { data: pointsData, error: pointsError } = await supabase
@@ -95,45 +113,56 @@ export default function SharedTrackScreen() {
 
     // Subscribe to new points (User A's path)
     const channel = supabase
-      .channel(`track_updates_${id}`)
+      .channel(`track_updates_${id}`, {
+          config: {
+              presence: {
+                  key: user?.id || 'guest',
+              },
+          },
+      });
+
+    channel
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'points',
-          filter: `track_id=eq.${id}`,
-        },
-        (payload) => {
-          const newPoint = payload.new;
-          setPoints((prev) => [
-            ...prev,
-            {
-              lat: newPoint.lat,
-              lng: newPoint.lng,
-              timestamp: new Date(newPoint.timestamp).getTime() / 1000,
-            },
-          ]);
-        }
+// ...
       )
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'tracks',
-          filter: `id=eq.${id}`,
-        },
-        (payload) => {
-           setIsActive(payload.new.is_active);
-        }
+// ...
       )
-      .subscribe();
+      .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+              await channel.track({
+                  online_at: new Date().toISOString(),
+              });
+          }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id]);
+
+
+  // Timer for Expiration
+  useEffect(() => {
+      if (!expiresAt || !isActive) return;
+
+      const updateTimer = () => {
+          const diff = new Date(expiresAt).getTime() - Date.now();
+          if (diff <= 0) {
+              setTimeLeft('Expired');
+              setIsActive(false);
+              return;
+          }
+          const mins = Math.floor(diff / 60000);
+          const secs = Math.floor((diff % 60000) / 1000);
+          setTimeLeft(`${mins}m ${secs}s`);
+      };
+
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+  }, [expiresAt, isActive]);
 
   // Subscribe to Ad-hoc Fleet (Other viewers sharing back)
   useEffect(() => {
@@ -204,6 +233,25 @@ export default function SharedTrackScreen() {
     const hostPoint = points[points.length - 1];
     const dist = getDistanceFromLatLonInM(currentLoc.lat, currentLoc.lng, hostPoint.lat, hostPoint.lng);
 
+    // Arrival Check
+    const arrThreshold = parseInt(arrivalDistance, 10);
+    if (!isNaN(arrThreshold) && arrivalEnabled) {
+        if (dist <= arrThreshold) {
+            if (!arrivedHostRef.current) {
+                arrivedHostRef.current = true;
+                Notifications.send(
+                    user!.id,
+                    'Arrival Alert!',
+                    `You have arrived (within ${Math.round(dist)}m).`,
+                    'success'
+                );
+            }
+        } else if (dist > arrThreshold + 50) {
+            arrivedHostRef.current = false;
+        }
+    }
+
+    // Proximity Check
     if (dist <= threshold) {
         if (!alertedHostRef.current) {
             alertedHostRef.current = true;
@@ -240,7 +288,9 @@ export default function SharedTrackScreen() {
             avatar_url: user.imageUrl,
             party_code: id, // Joining User A's party
             proximity_enabled: proximityEnabled,
-            proximity_meters: parseInt(proximityDistance) || 500
+            proximity_meters: parseInt(proximityDistance) || 500,
+            arrival_enabled: arrivalEnabled,
+            arrival_meters: parseInt(arrivalDistance) || 50
         }])
         .select()
         .single();
@@ -318,6 +368,56 @@ export default function SharedTrackScreen() {
             theme={colorScheme as 'light' | 'dark'}
             fleetMembers={adHocMembers}
         />
+
+        {/* Note Overlay */}
+        {(note || timeLeft) && (
+            <View className="absolute top-4 left-4 right-4 z-10">
+                <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    {note && (
+                        <View className="flex-row items-center gap-2 mb-1">
+                            <Ionicons name="chatbubble-outline" size={16} color="#2563eb" />
+                            <Text className="text-gray-900 dark:text-white font-medium flex-1">{note}</Text>
+                        </View>
+                    )}
+                    {timeLeft && (
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="time-outline" size={16} color="#6b7280" />
+                            <Text className="text-gray-500 dark:text-gray-400 text-xs">
+                                {timeLeft === 'Expired' ? 'Sharing has ended' : `Expires in: ${timeLeft}`}
+                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                        
+                                                {/* Arrival Alert Settings */}
+                                                <View className="bg-green-50 dark:bg-gray-800 p-3 rounded-lg border border-green-100 dark:border-gray-700">
+                                                    <View className="flex-row items-center justify-between mb-2">
+                                                        <View className="flex-row items-center gap-2">
+                                                            <Ionicons name="flag-outline" size={20} color="#16a34a" />
+                                                            <Text className="text-gray-900 dark:text-white font-semibold">Arrival Alert</Text>
+                                                        </View>
+                                                        <Switch 
+                                                            value={arrivalEnabled} 
+                                                            onValueChange={setArrivalEnabled}
+                                                            trackColor={{ false: '#e2e8f0', true: '#16a34a' }}
+                                                        />
+                                                    </View>
+                                                    {arrivalEnabled && (
+                                                        <View className="flex-row items-center gap-2">
+                                                            <Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text>
+                                                            <TextInput 
+                                                                value={arrivalDistance}
+                                                                onChangeText={setArrivalDistance}
+                                                                keyboardType="numeric"
+                                                                className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
+                                                            />
+                                                            <Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                             </View>
+                                        )}
+                        
       </View>
 
       <View className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">

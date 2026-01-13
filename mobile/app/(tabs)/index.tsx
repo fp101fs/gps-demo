@@ -46,11 +46,20 @@ export default function HomeScreen() {
   const [fleetCode, setFleetCode] = useState('');
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [viewerCount, setViewerCount] = useState(0);
   
+  // Share Settings State
+  const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
+  const [customDuration, setCustomDuration] = useState('60'); // minutes
+  const [shareNote, setShareNote] = useState('');
+
   // Proximity State
   const [proximityEnabled, setProximityEnabled] = useState(false);
   const [proximityDistance, setProximityDistance] = useState('500');
+  const [arrivalEnabled, setArrivalEnabled] = useState(false);
+  const [arrivalDistance, setArrivalDistance] = useState('50');
   const alertedMembersRef = useRef<Set<string>>(new Set());
+  const arrivedMembersRef = useRef<Set<string>>(new Set());
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -84,6 +93,25 @@ export default function HomeScreen() {
       adHocMembers.forEach(async (member) => {
           const dist = getDistanceFromLatLonInM(currentPoint.lat, currentPoint.lng, member.lat, member.lng);
           
+          // Arrival Check
+          const arrThreshold = parseInt(arrivalDistance, 10);
+          if (!isNaN(arrThreshold) && arrivalEnabled) {
+              if (dist <= arrThreshold) {
+                  if (!arrivedMembersRef.current.has(member.id)) {
+                      arrivedMembersRef.current.add(member.id);
+                      await Notifications.send(
+                          user!.id, 
+                          'Arrival Alert!', 
+                          `A member has arrived (within ${Math.round(dist)}m).`, 
+                          'success'
+                      );
+                  }
+              } else if (dist > arrThreshold + 50) {
+                  arrivedMembersRef.current.delete(member.id);
+              }
+          }
+
+          // Proximity Check
           if (dist <= threshold) {
               if (!alertedMembersRef.current.has(member.id)) {
                   // Trigger Alert
@@ -136,11 +164,12 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!trackId) {
         setAdHocMembers([]);
+        setViewerCount(0);
         return;
     }
 
     const channel = supabase
-      .channel(`adhoc_fleet_${trackId}`)
+      .channel(`track_updates_${trackId}`)
       .on(
         'postgres_changes',
         {
@@ -173,6 +202,11 @@ export default function HomeScreen() {
           }
         }
       )
+      .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const count = Object.keys(state).length;
+          setViewerCount(Math.max(0, count - 1)); // -1 for the host
+      })
       .subscribe();
 
     return () => {
@@ -203,6 +237,14 @@ export default function HomeScreen() {
       return;
     }
 
+    // Calculate expiration
+    let minutes = 20;
+    if (durationOption === '2h') minutes = 120;
+    else if (durationOption === '10h') minutes = 600;
+    else if (durationOption === 'Custom') minutes = parseInt(customDuration) || 20;
+
+    const expiresAt = new Date(Date.now() + minutes * 60000).toISOString();
+
     // Create Track in DB
     const avatarUrl = useProfileIcon ? user.imageUrl : null;
     const { data: track, error } = await supabase
@@ -213,7 +255,11 @@ export default function HomeScreen() {
             avatar_url: avatarUrl,
             party_code: fleetCode || null,
             proximity_enabled: proximityEnabled,
-            proximity_meters: parseInt(proximityDistance) || 500
+            proximity_meters: parseInt(proximityDistance) || 500,
+            arrival_enabled: arrivalEnabled,
+            arrival_meters: parseInt(arrivalDistance) || 50,
+            expires_at: expiresAt,
+            note: shareNote || null
         }])
         .select()
         .single();
@@ -362,9 +408,17 @@ export default function HomeScreen() {
         <View className="mb-6 flex-row items-center justify-between">
           <View>
             <Text className="text-3xl font-bold text-gray-900 dark:text-white">GPS Tracker</Text>
-            <Text className="text-gray-500 dark:text-gray-400">
-               {isTracking ? '🟢 Tracking Active' : 'Ready to start'}
-            </Text>
+            <View className="flex-row items-center gap-2">
+                <Text className="text-gray-500 dark:text-gray-400">
+                {isTracking ? '🟢 Tracking Active' : 'Ready to start'}
+                </Text>
+                {isTracking && viewerCount > 0 && (
+                    <View className="bg-blue-100 dark:bg-blue-900 px-2 py-0.5 rounded-full flex-row items-center gap-1">
+                        <Ionicons name="eye-outline" size={12} color="#2563eb" />
+                        <Text className="text-[10px] font-bold text-blue-600 dark:text-blue-300">{viewerCount} watching</Text>
+                    </View>
+                )}
+            </View>
           </View>
           <View className="flex-row gap-2 items-center">
             {/* Notification Bell */}
@@ -443,6 +497,53 @@ export default function HomeScreen() {
                             />
                         </View>
                         
+                        {/* Expiration Settings */}
+                        <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                             <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
+                             <View className="flex-row gap-2 mb-2">
+                                {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
+                                    <TouchableOpacity 
+                                        key={opt}
+                                        onPress={() => setDurationOption(opt)}
+                                        className={cn(
+                                            "flex-1 py-2 rounded-md border items-center",
+                                            durationOption === opt 
+                                                ? "bg-blue-600 border-blue-600" 
+                                                : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600"
+                                        )}
+                                    >
+                                        <Text className={cn(
+                                            "text-xs font-bold",
+                                            durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300"
+                                        )}>{opt}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                             </View>
+                             {durationOption === 'Custom' && (
+                                 <View className="flex-row items-center gap-2 mb-2">
+                                     <TextInput 
+                                        value={customDuration}
+                                        onChangeText={setCustomDuration}
+                                        keyboardType="numeric"
+                                        className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
+                                     />
+                                     <Text className="text-gray-500 text-xs">minutes</Text>
+                                 </View>
+                             )}
+                        </View>
+
+                        {/* Note Input */}
+                        <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                             <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Add a Note (Optional)</Text>
+                             <TextInput 
+                                value={shareNote}
+                                onChangeText={setShareNote}
+                                placeholder="e.g. 'Meeting at the park!'"
+                                placeholderTextColor="#9ca3af"
+                                className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600"
+                             />
+                        </View>
+
                         <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                              <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
                              <TextInput 
@@ -480,6 +581,33 @@ export default function HomeScreen() {
                                     <TextInput 
                                         value={proximityDistance}
                                         onChangeText={setProximityDistance}
+                                        keyboardType="numeric"
+                                        className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
+                                    />
+                                    <Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Arrival Alert Settings */}
+                        <View className="bg-green-50 dark:bg-gray-800 p-3 rounded-lg border border-green-100 dark:border-gray-700">
+                            <View className="flex-row items-center justify-between mb-2">
+                                <View className="flex-row items-center gap-2">
+                                    <Ionicons name="flag-outline" size={20} color="#16a34a" />
+                                    <Text className="text-gray-900 dark:text-white font-semibold">Arrival Alert</Text>
+                                </View>
+                                <Switch 
+                                    value={arrivalEnabled} 
+                                    onValueChange={setArrivalEnabled}
+                                    trackColor={{ false: '#e2e8f0', true: '#16a34a' }}
+                                />
+                            </View>
+                            {arrivalEnabled && (
+                                <View className="flex-row items-center gap-2">
+                                    <Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text>
+                                    <TextInput 
+                                        value={arrivalDistance}
+                                        onChangeText={setArrivalDistance}
                                         keyboardType="numeric"
                                         className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
                                     />
