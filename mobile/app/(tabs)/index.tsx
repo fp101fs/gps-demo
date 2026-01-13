@@ -208,12 +208,23 @@ export default function HomeScreen() {
 
         if (!initialLocation) { setIsStarting(false); return Alert.alert('Error', 'Could not determine location.'); }
 
-        if (shareType === 'address') {
+        const lat = initialLocation.coords.latitude;
+        const lng = initialLocation.coords.longitude;
+        
+        // Set data for the Success Modal preview
+        setCurrentPoint({ lat, lng, timestamp: Date.now() / 1000 });
+
+        if (shareType === 'address' || shareType === 'current') {
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${initialLocation.coords.latitude}&lon=${initialLocation.coords.longitude}&zoom=18&addressdetails=1`);
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
                 const data = await res.json();
                 const addr = data.display_name;
-                if (addr) finalNote = (shareNote ? shareNote + " - " : "") + addr;
+                if (addr) {
+                    setAddress(addr);
+                    if (shareType === 'address') {
+                        finalNote = (shareNote ? shareNote + " - " : "") + addr;
+                    }
+                }
             } catch (e) {}
         }
 
@@ -222,7 +233,7 @@ export default function HomeScreen() {
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
             expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
-            share_type: shareType, lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude
+            share_type: shareType, lat: lat, lng: lng
         }]).select().single();
 
         if (error) { setIsStarting(false); return Alert.alert('Error', 'Could not create session.'); }
