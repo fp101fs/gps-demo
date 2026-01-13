@@ -24,6 +24,9 @@ interface Journey {
   avatar_url?: string;
   proximity_enabled?: boolean;
   proximity_meters?: number;
+  privacy_mode?: string;
+  allowed_emails?: string[];
+  password?: string;
 }
 
 export default function HomeScreen() {
@@ -57,6 +60,13 @@ export default function HomeScreen() {
   const [customDuration, setCustomDuration] = useState('60');
   const [shareNote, setShareNote] = useState('');
   const [shareType, setShareType] = useState<'live' | 'current' | 'address'>('live');
+
+  // Privacy Modal State
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [tempPrivacyMode, setTempPrivacyMode] = useState<'link' | 'private'>('link');
+  const [tempAllowedEmails, setTempAllowedEmails] = useState<string[]>([]);
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const [tempPassword, setTempPassword] = useState('');
 
   const [proximityEnabled, setProximityEnabled] = useState(false);
   const [proximityDistance, setProximityDistance] = useState('500');
@@ -179,98 +189,52 @@ export default function HomeScreen() {
   const startTracking = async () => {
     if (isStarting) return;
     setIsStarting(true);
-    console.log('Starting share flow...', shareType);
 
     try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            setIsStarting(false);
-            return Alert.alert('Permission denied', 'Allow location access.');
-        }
-        if (!user) {
-            setIsStarting(false);
-            return;
-        }
+        if (status !== 'granted') { setIsStarting(false); return Alert.alert('Permission denied', 'Allow location access.'); }
+        if (!user) { setIsStarting(false); return; }
 
-        // Calculate expiration
         let mins = 20;
         if (durationOption === '2h') mins = 120;
         else if (durationOption === '10h') mins = 600;
         else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
 
         const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
-        
         let finalNote = shareNote;
-        console.log('Fetching initial position...');
-        
-        // Fast timeout for position to avoid hanging
-        const initialLocation = await Location.getCurrentPositionAsync({ 
-            accuracy: Location.Accuracy.Balanced 
-        }).catch(err => {
-            console.error('Error fetching position:', err);
-            return null;
-        });
+        const initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
 
-        if (!initialLocation) {
-            setIsStarting(false);
-            return Alert.alert('Error', 'Could not determine your location. Please ensure GPS is enabled.');
-        }
+        if (!initialLocation) { setIsStarting(false); return Alert.alert('Error', 'Could not determine location.'); }
 
         if (shareType === 'address') {
-            console.log('Reverse geocoding address...');
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${initialLocation.coords.latitude}&lon=${initialLocation.coords.longitude}&zoom=18&addressdetails=1`);
                 const data = await res.json();
                 const addr = data.display_name;
                 if (addr) finalNote = (shareNote ? shareNote + " - " : "") + addr;
-            } catch (e) {
-                console.warn('Address fetch failed:', e);
-            }
+            } catch (e) {}
         }
 
-        console.log('Creating track in database...');
         const { data: track, error } = await supabase.from('tracks').insert([{ 
-            is_active: shareType === 'live', 
-            user_id: user.id, 
-            avatar_url: useProfileIcon ? user.imageUrl : null, 
-            party_code: fleetCode || null, 
-            proximity_enabled: proximityEnabled, 
-            proximity_meters: parseInt(proximityDistance) || 500,
-            arrival_enabled: arrivalEnabled, 
-            arrival_meters: parseInt(arrivalDistance) || 50,
-            expires_at: shareType === 'live' ? expiresAt : null, 
-            note: finalNote || null,
-            share_type: shareType,
-            lat: initialLocation.coords.latitude,
-            lng: initialLocation.coords.longitude
+            is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
+            party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
+            arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
+            expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
+            share_type: shareType, lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude
         }]).select().single();
 
-        if (error) {
-            console.error('Supabase track creation error:', error);
-            setIsStarting(false);
-            return Alert.alert('Error', 'Could not create sharing session.');
-        }
+        if (error) { setIsStarting(false); return Alert.alert('Error', 'Could not create session.'); }
         
-        console.log('Saving initial point...');
-        await supabase.from('points').insert([{ 
-            track_id: track.id, 
-            lat: initialLocation.coords.latitude, 
-            lng: initialLocation.coords.longitude, 
-            timestamp: new Date().toISOString() 
-        }]);
+        await supabase.from('points').insert([{ track_id: track.id, lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: new Date().toISOString() }]);
 
+        setTrackId(track.id);
+        
         if (shareType !== 'live') {
-            const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${track.id}`;
-            await Clipboard.setStringAsync(url);
-            console.log('Static share complete. URL copied.');
             setIsStarting(false);
-            Alert.alert('Location Shared', `Your ${shareType} location link has been copied to clipboard.`);
-            fetchPastJourneys();
+            setShareModalVisible(true);
             return;
         }
 
-        console.log('Starting live tracking subscription...');
-        setTrackId(track.id);
         setCurrentExpiresAt(expiresAt);
         setIsTracking(true);
         setIsStarting(false);
@@ -278,9 +242,7 @@ export default function HomeScreen() {
         setPoints([{ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 }]);
         setCurrentPoint({ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 });
         
-        timerRef.current = setInterval(() => {
-          if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-        }, 1000);
+        timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000);
 
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
@@ -293,11 +255,7 @@ export default function HomeScreen() {
             await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
           }
         );
-    } catch (globalErr) {
-        console.error('Global startTracking error:', globalErr);
-        setIsStarting(false);
-        Alert.alert('Error', 'An unexpected error occurred while sharing.');
-    }
+    } catch (globalErr) { setIsStarting(false); Alert.alert('Error', 'Unexpected error occurred.'); }
   };
 
   const stopTracking = async () => {
@@ -320,13 +278,39 @@ export default function HomeScreen() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
-  const shareJourney = async () => {
-    if (!trackId) return;
-    const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
-    await Clipboard.setStringAsync(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    if (Platform.OS !== 'web') await Share.share({ message: `Follow my live journey: ${url}`, url });
+  const confirmShare = async () => {
+      if (!trackId) return;
+      
+      // Update privacy settings in DB
+      await supabase.from('tracks').update({
+          privacy_mode: tempPrivacyMode,
+          allowed_emails: tempAllowedEmails,
+          password: tempPassword || null
+      }).eq('id', trackId);
+
+      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
+      await Clipboard.setStringAsync(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      
+      setShareModalVisible(false);
+      
+      if (Platform.OS !== 'web') {
+          await Share.share({ message: `Follow my journey: ${url}`, url });
+      } else {
+          Alert.alert('Link Copied', 'Your secure share link is ready!');
+      }
+  };
+
+  const addEmail = () => {
+      if (newEmailInput && !tempAllowedEmails.includes(newEmailInput)) {
+          setTempAllowedEmails([...tempAllowedEmails, newEmailInput.toLowerCase()]);
+          setNewEmailInput('');
+      }
+  };
+
+  const removeEmail = (email: string) => {
+      setTempAllowedEmails(tempAllowedEmails.filter(e => e !== email));
   };
 
   return (
@@ -359,7 +343,7 @@ export default function HomeScreen() {
                         <Button variant="outline" size="sm" onPress={() => setShowQR(true)} className="px-2">
                             <Ionicons name="qr-code-outline" size={18} color={colorScheme === 'dark' ? 'white' : 'black'} />
                         </Button>
-                        <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
+                        <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={() => setShareModalVisible(true)}>
                             <Text className={copied ? "text-green-600" : "text-blue-600 dark:text-blue-400"}>{copied ? 'Copied!' : 'Share'}</Text>
                         </Button>
                     </View>
@@ -413,36 +397,17 @@ export default function HomeScreen() {
                                 <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
                             </View>
 
-                            {/* Share Type Selector */}
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
                                 <View className="flex-row gap-2">
                                     {(['live', 'current', 'address'] as const).map((type) => (
-                                        <TouchableOpacity 
-                                            key={type}
-                                            onPress={() => setShareType(type)}
-                                            className={cn(
-                                                "flex-1 py-2 rounded-md border items-center",
-                                                shareType === type 
-                                                    ? "bg-blue-600 border-blue-600" 
-                                                    : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600"
-                                            )}
-                                        >
-                                            <Text className={cn(
-                                                "text-[10px] font-bold uppercase",
-                                                shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300"
-                                            )}>{type}</Text>
+                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                            <Text className={cn("text-[10px] font-bold uppercase", shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300")}>{type}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
-                                <Text className="text-[10px] text-gray-400 mt-2 italic">
-                                    {shareType === 'live' ? "Viewers see your location update in real-time." : 
-                                     shareType === 'current' ? "Share your exact coordinate once." : 
-                                     "Share your nearest street address once."}
-                                </Text>
                             </View>
                             
-                            {/* Expiration Settings */}
                             {shareType === 'live' && (
                                 <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                      <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
@@ -462,16 +427,10 @@ export default function HomeScreen() {
                             </View>
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                  <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
-                                 <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'bachelor-party'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" autoCapitalize="none" />
+                                 <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'bachelor-party'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600 autoCapitalize='none'" />
                             </View>
-                            <Button 
-                                onPress={startTracking} 
-                                className="w-full"
-                                disabled={isStarting}
-                            >
-                                <Text className="text-white font-bold">
-                                    {isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}
-                                </Text>
+                            <Button onPress={startTracking} className="w-full" disabled={isStarting}>
+                                <Text className="text-white font-bold">{isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}</Text>
                             </Button>
                         </View>
                     ) : (
@@ -481,14 +440,14 @@ export default function HomeScreen() {
                                     <View className="flex-row items-center gap-2"><Ionicons name="radio-outline" size={20} color="#2563eb" /><Text className="text-gray-900 dark:text-white font-semibold">Proximity Alert</Text></View>
                                     <Switch value={proximityEnabled} onValueChange={setProximityEnabled} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
                                 </View>
-                                {proximityEnabled && <View className="flex-row items-center gap-2"><Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text><TextInput value={proximityDistance} onChangeText={setProximityDistance} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text></View>}
+                                {proximityEnabled && <View className="flex-row items-center gap-2"><Text className="text-gray-600 dark:text-gray-400 text-sm">Alert @</Text><TextInput value={proximityDistance} onChangeText={setProximityDistance} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text></View>}
                             </View>
                             <View className="bg-green-50 dark:bg-gray-800 p-3 rounded-lg border border-green-100 dark:border-gray-700">
                                 <View className="flex-row items-center justify-between mb-2">
                                     <View className="flex-row items-center gap-2"><Ionicons name="flag-outline" size={20} color="#16a34a" /><Text className="text-gray-900 dark:text-white font-semibold">Arrival Alert</Text></View>
                                     <Switch value={arrivalEnabled} onValueChange={setArrivalEnabled} trackColor={{ false: '#e2e8f0', true: '#16a34a' }} />
                                 </View>
-                                {arrivalEnabled && <View className="flex-row items-center gap-2"><Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text><TextInput value={arrivalDistance} onChangeText={setArrivalDistance} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text></View>}
+                                {arrivalEnabled && <View className="flex-row items-center gap-2"><Text className="text-gray-600 dark:text-gray-400 text-sm">Alert @</Text><TextInput value={arrivalDistance} onChangeText={setArrivalDistance} keyboardType="numeric" className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center" /><Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text></View>}
                             </View>
                             <Button onPress={stopTracking} variant="destructive" className="w-full"><Text className="text-white font-bold">Stop Tracking</Text></Button>
                         </View>
@@ -504,9 +463,7 @@ export default function HomeScreen() {
                         <View className="flex-1">
                             <Text className="font-semibold text-gray-800 dark:text-gray-200">{new Date(journey.created_at).toLocaleDateString()}</Text>
                             <Text className="text-xs text-gray-500">{new Date(journey.created_at).toLocaleTimeString()}</Text>
-                            {journey.note && (
-                                <Text className="text-sm text-gray-600 dark:text-gray-400 mt-1 italic" numberOfLines={1}>"{journey.note}"</Text>
-                            )}
+                            {journey.note && <Text className="text-sm text-gray-600 dark:text-gray-400 mt-1 italic" numberOfLines={1}>"{journey.note}"</Text>}
                         </View>
                         <View className={`px-2 py-1 rounded-full ${journey.is_active ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'}`}><Text className={`text-xs font-medium ${journey.is_active ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>{journey.is_active ? 'Active' : 'Completed'}</Text></View>
                     </View>
@@ -514,6 +471,63 @@ export default function HomeScreen() {
             ))}
         </View>
       </ScrollView>
+
+      {/* Share Settings Modal */}
+      <Modal visible={shareModalVisible} transparent={true} animationType="slide" onRequestClose={() => setShareModalVisible(false)}>
+        <View className="flex-1 justify-end bg-black/50">
+            <View className="bg-white dark:bg-gray-900 p-6 rounded-t-3xl shadow-xl w-full max-w-2xl mx-auto">
+                <View className="flex-row justify-between items-center mb-6">
+                    <Text className="text-xl font-bold text-gray-900 dark:text-white">Share Settings</Text>
+                    <TouchableOpacity onPress={() => setShareModalVisible(false)}><Ionicons name="close" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} /></TouchableOpacity>
+                </View>
+
+                {/* Privacy Mode */}
+                <View className="mb-6">
+                    <Text className="text-sm font-bold text-gray-500 uppercase mb-3 text-[10px]">Privacy Mode</Text>
+                    <View className="flex-row gap-2">
+                        <TouchableOpacity onPress={() => setTempPrivacyMode('link')} className={cn("flex-1 p-4 rounded-xl border items-center", tempPrivacyMode === 'link' ? "bg-blue-50 border-blue-600 dark:bg-blue-900/20" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700")}>
+                            <Ionicons name="link-outline" size={24} color={tempPrivacyMode === 'link' ? '#2563eb' : '#6b7280'} />
+                            <Text className={cn("mt-2 font-bold", tempPrivacyMode === 'link' ? "text-blue-600" : "text-gray-500")}>Anyone with Link</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setTempPrivacyMode('private')} className={cn("flex-1 p-4 rounded-xl border items-center", tempPrivacyMode === 'private' ? "bg-blue-50 border-blue-600 dark:bg-blue-900/20" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700")}>
+                            <Ionicons name="mail-outline" size={24} color={tempPrivacyMode === 'private' ? '#2563eb' : '#6b7280'} />
+                            <Text className={cn("mt-2 font-bold", tempPrivacyMode === 'private' ? "text-blue-600" : "text-gray-500")}>Specific Emails</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Email Whitelist */}
+                {tempPrivacyMode === 'private' && (
+                    <View className="mb-6">
+                        <Text className="text-sm font-bold text-gray-500 uppercase mb-3 text-[10px]">Allowed Emails</Text>
+                        <View className="flex-row gap-2 mb-3">
+                            <TextInput value={newEmailInput} onChangeText={setNewEmailInput} placeholder="friend@example.com" placeholderTextColor="#9ca3af" className="flex-1 bg-gray-50 dark:bg-gray-800 dark:text-white p-3 rounded-xl border border-gray-200 dark:border-gray-700" keyboardType="email-address" autoCapitalize="none" />
+                            <Button onPress={addEmail} variant="secondary" className="px-4"><Text className="text-blue-600 font-bold">Add</Text></Button>
+                        </View>
+                        <View className="flex-row flex-wrap gap-2">
+                            {tempAllowedEmails.map(email => (
+                                <View key={email} className="flex-row items-center bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-full">
+                                    <Text className="text-blue-700 dark:text-blue-200 text-xs">{email}</Text>
+                                    <TouchableOpacity onPress={() => removeEmail(email)} className="ml-2"><Ionicons name="close-circle" size={16} color="#2563eb" /></TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                )}
+
+                {/* Password Protection */}
+                <View className="mb-8">
+                    <Text className="text-sm font-bold text-gray-500 uppercase mb-3 text-[10px]">Password Protection (Optional)</Text>
+                    <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <Ionicons name="lock-closed-outline" size={20} color="#6b7280" className="mr-2" />
+                        <TextInput value={tempPassword} onChangeText={setTempPassword} placeholder="Enter a password" placeholderTextColor="#9ca3af" className="flex-1 dark:text-white" secureTextEntry />
+                    </View>
+                </View>
+
+                <Button onPress={confirmShare} className="w-full h-14"><Text className="text-white font-bold text-lg">Confirm & Share Link</Text></Button>
+            </View>
+        </View>
+      </Modal>
 
       <Modal visible={showQR} transparent={true} animationType="fade" onRequestClose={() => setShowQR(false)}>
         <View className="flex-1 justify-center items-center bg-black/50 p-6">
