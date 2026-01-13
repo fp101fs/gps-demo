@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { supabase } from '@/lib/supabase';
 import { Notifications } from '@/lib/notifications';
+import { cn, getDistanceFromLatLonInM } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Map from '@/components/Map';
@@ -22,6 +23,8 @@ interface Journey {
   created_at: string;
   is_active: boolean;
   avatar_url?: string;
+  proximity_enabled?: boolean;
+  proximity_meters?: number;
 }
 
 export default function HomeScreen() {
@@ -43,6 +46,11 @@ export default function HomeScreen() {
   const [fleetCode, setFleetCode] = useState('');
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Proximity State
+  const [proximityEnabled, setProximityEnabled] = useState(false);
+  const [proximityDistance, setProximityDistance] = useState('500');
+  const alertedMembersRef = useRef<Set<string>>(new Set());
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -65,6 +73,36 @@ export default function HomeScreen() {
       checkAndWelcome();
     }
   }, [user]);
+
+  // Proximity Check Logic
+  useEffect(() => {
+      if (!isTracking || !proximityEnabled || !currentPoint || adHocMembers.length === 0) return;
+
+      const threshold = parseInt(proximityDistance, 10);
+      if (isNaN(threshold)) return;
+
+      adHocMembers.forEach(async (member) => {
+          const dist = getDistanceFromLatLonInM(currentPoint.lat, currentPoint.lng, member.lat, member.lng);
+          
+          if (dist <= threshold) {
+              if (!alertedMembersRef.current.has(member.id)) {
+                  // Trigger Alert
+                  alertedMembersRef.current.add(member.id);
+                  await Notifications.send(
+                      user!.id, 
+                      'Proximity Alert!', 
+                      `A fleet member is nearby (${Math.round(dist)}m away).`, 
+                      'alert'
+                  );
+              }
+          } else {
+              // Reset if they move away so we can alert again if they come back
+              if (dist > threshold + 100) { // Add buffer to prevent flapping
+                  alertedMembersRef.current.delete(member.id);
+              }
+          }
+      });
+  }, [currentPoint, adHocMembers, proximityEnabled, proximityDistance]);
 
   const fetchUnreadCount = async () => {
       if (!user) return;
@@ -173,7 +211,9 @@ export default function HomeScreen() {
             is_active: true, 
             user_id: user.id,
             avatar_url: avatarUrl,
-            party_code: fleetCode || null
+            party_code: fleetCode || null,
+            proximity_enabled: proximityEnabled,
+            proximity_meters: parseInt(proximityDistance) || 500
         }])
         .select()
         .single();
@@ -420,9 +460,38 @@ export default function HomeScreen() {
                         </Button>
                     </View>
                 ) : (
-                    <Button onPress={stopTracking} variant="destructive" className="w-full">
-                         <Text className="text-white font-bold">Stop Tracking</Text>
-                    </Button>
+                    <View className="gap-4">
+                        {/* Proximity Alert Settings */}
+                        <View className="bg-blue-50 dark:bg-gray-800 p-3 rounded-lg border border-blue-100 dark:border-gray-700">
+                            <View className="flex-row items-center justify-between mb-2">
+                                <View className="flex-row items-center gap-2">
+                                    <Ionicons name="radio-outline" size={20} color="#2563eb" />
+                                    <Text className="text-gray-900 dark:text-white font-semibold">Proximity Alert</Text>
+                                </View>
+                                <Switch 
+                                    value={proximityEnabled} 
+                                    onValueChange={setProximityEnabled}
+                                    trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                                />
+                            </View>
+                            {proximityEnabled && (
+                                <View className="flex-row items-center gap-2">
+                                    <Text className="text-gray-600 dark:text-gray-400 text-sm">Alert when closer than:</Text>
+                                    <TextInput 
+                                        value={proximityDistance}
+                                        onChangeText={setProximityDistance}
+                                        keyboardType="numeric"
+                                        className="bg-white dark:bg-gray-700 dark:text-white px-2 py-1 rounded border border-gray-200 dark:border-gray-600 w-20 text-center"
+                                    />
+                                    <Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <Button onPress={stopTracking} variant="destructive" className="w-full">
+                             <Text className="text-white font-bold">Stop Tracking</Text>
+                        </Button>
+                    </View>
                 )}
             </CardContent>
         </Card>
