@@ -37,6 +37,7 @@ export default function HomeScreen() {
   const [copied, setCopied] = useState(false);
   const [useProfileIcon, setUseProfileIcon] = useState(false);
   const [fleetCode, setFleetCode] = useState('');
+  const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
 
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -48,6 +49,54 @@ export default function HomeScreen() {
       fetchPastJourneys();
     }
   }, [user]);
+
+  // Subscribe to Ad-hoc Fleet (people sharing back to my trackId)
+  useEffect(() => {
+    if (!trackId) {
+        setAdHocMembers([]);
+        return;
+    }
+
+    const channel = supabase
+      .channel(`adhoc_fleet_${trackId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tracks',
+          filter: `party_code=eq.${trackId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+             const m = payload.new;
+             if (!m.is_active || m.lat === null || m.lng === null) {
+                 setAdHocMembers(prev => prev.filter(p => p.id !== m.id));
+                 return;
+             }
+             
+             setAdHocMembers(prev => {
+                 const exists = prev.find(p => p.id === m.id);
+                 if (exists) {
+                     return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url } : p);
+                 } else {
+                     return [...prev, {
+                        id: m.id,
+                        lat: m.lat,
+                        lng: m.lng,
+                        avatarUrl: m.avatar_url
+                     }];
+                 }
+             });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [trackId]);
 
   const fetchPastJourneys = async () => {
     if (!user) return;
@@ -258,6 +307,7 @@ export default function HomeScreen() {
                     points={points} 
                     avatarUrl={useProfileIcon ? user?.imageUrl : undefined} 
                     theme={colorScheme as 'light' | 'dark'}
+                    fleetMembers={adHocMembers}
                 />
                 
                 {/* Overlay Stats (iOS Style Blur) */}
