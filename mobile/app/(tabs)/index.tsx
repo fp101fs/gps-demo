@@ -51,6 +51,7 @@ export default function HomeScreen() {
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [currentExpiresAt, setCurrentExpiresAt] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -176,85 +177,127 @@ export default function HomeScreen() {
   };
 
   const startTracking = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return Alert.alert('Permission denied', 'Allow location access.');
-    if (!user) return;
+    if (isStarting) return;
+    setIsStarting(true);
+    console.log('Starting share flow...', shareType);
 
-    let mins = 20;
-    if (durationOption === '2h') mins = 120;
-    else if (durationOption === '10h') mins = 600;
-    else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
+    try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            setIsStarting(false);
+            return Alert.alert('Permission denied', 'Allow location access.');
+        }
+        if (!user) {
+            setIsStarting(false);
+            return;
+        }
 
-    const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
-    
-    let finalNote = shareNote;
-    let initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    
-    if (shareType === 'address') {
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${initialLocation.coords.latitude}&lon=${initialLocation.coords.longitude}&zoom=18&addressdetails=1`);
-            const data = await res.json();
-            const addr = data.display_name;
-            if (addr) finalNote = (shareNote ? shareNote + " - " : "") + addr;
-        } catch (e) {}
+        // Calculate expiration
+        let mins = 20;
+        if (durationOption === '2h') mins = 120;
+        else if (durationOption === '10h') mins = 600;
+        else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
+
+        const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
+        
+        let finalNote = shareNote;
+        console.log('Fetching initial position...');
+        
+        // Fast timeout for position to avoid hanging
+        const initialLocation = await Location.getCurrentPositionAsync({ 
+            accuracy: Location.Accuracy.Balanced 
+        }).catch(err => {
+            console.error('Error fetching position:', err);
+            return null;
+        });
+
+        if (!initialLocation) {
+            setIsStarting(false);
+            return Alert.alert('Error', 'Could not determine your location. Please ensure GPS is enabled.');
+        }
+
+        if (shareType === 'address') {
+            console.log('Reverse geocoding address...');
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${initialLocation.coords.latitude}&lon=${initialLocation.coords.longitude}&zoom=18&addressdetails=1`);
+                const data = await res.json();
+                const addr = data.display_name;
+                if (addr) finalNote = (shareNote ? shareNote + " - " : "") + addr;
+            } catch (e) {
+                console.warn('Address fetch failed:', e);
+            }
+        }
+
+        console.log('Creating track in database...');
+        const { data: track, error } = await supabase.from('tracks').insert([{ 
+            is_active: shareType === 'live', 
+            user_id: user.id, 
+            avatar_url: useProfileIcon ? user.imageUrl : null, 
+            party_code: fleetCode || null, 
+            proximity_enabled: proximityEnabled, 
+            proximity_meters: parseInt(proximityDistance) || 500,
+            arrival_enabled: arrivalEnabled, 
+            arrival_meters: parseInt(arrivalDistance) || 50,
+            expires_at: shareType === 'live' ? expiresAt : null, 
+            note: finalNote || null,
+            share_type: shareType,
+            lat: initialLocation.coords.latitude,
+            lng: initialLocation.coords.longitude
+        }]).select().single();
+
+        if (error) {
+            console.error('Supabase track creation error:', error);
+            setIsStarting(false);
+            return Alert.alert('Error', 'Could not create sharing session.');
+        }
+        
+        console.log('Saving initial point...');
+        await supabase.from('points').insert([{ 
+            track_id: track.id, 
+            lat: initialLocation.coords.latitude, 
+            lng: initialLocation.coords.longitude, 
+            timestamp: new Date().toISOString() 
+        }]);
+
+        if (shareType !== 'live') {
+            const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${track.id}`;
+            await Clipboard.setStringAsync(url);
+            console.log('Static share complete. URL copied.');
+            setIsStarting(false);
+            Alert.alert('Location Shared', `Your ${shareType} location link has been copied to clipboard.`);
+            fetchPastJourneys();
+            return;
+        }
+
+        console.log('Starting live tracking subscription...');
+        setTrackId(track.id);
+        setCurrentExpiresAt(expiresAt);
+        setIsTracking(true);
+        setIsStarting(false);
+        startTimeRef.current = Date.now();
+        setPoints([{ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 }]);
+        setCurrentPoint({ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 });
+        
+        timerRef.current = setInterval(() => {
+          if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }, 1000);
+
+        locationSubscription.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+          async (loc) => {
+            const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
+            setCurrentPoint(newPoint);
+            setPoints(prev => [...prev, newPoint]);
+            fetchAddress(newPoint.lat, newPoint.lng);
+            await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
+            await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
+          }
+        );
+    } catch (globalErr) {
+        console.error('Global startTracking error:', globalErr);
+        setIsStarting(false);
+        Alert.alert('Error', 'An unexpected error occurred while sharing.');
     }
-
-    const { data: track, error } = await supabase.from('tracks').insert([{ 
-        is_active: shareType === 'live', 
-        user_id: user.id, 
-        avatar_url: useProfileIcon ? user.imageUrl : null, 
-        party_code: fleetCode || null, 
-        proximity_enabled: proximityEnabled, 
-        proximity_meters: parseInt(proximityDistance) || 500,
-        arrival_enabled: arrivalEnabled, 
-        arrival_meters: parseInt(arrivalDistance) || 50,
-        expires_at: shareType === 'live' ? expiresAt : null, 
-        note: finalNote || null,
-        share_type: shareType,
-        lat: initialLocation.coords.latitude,
-        lng: initialLocation.coords.longitude
-    }]).select().single();
-
-    if (error) return Alert.alert('Error', 'Could not start tracking.');
-    
-    // Add initial point
-    await supabase.from('points').insert([{ 
-        track_id: track.id, 
-        lat: initialLocation.coords.latitude, 
-        lng: initialLocation.coords.longitude, 
-        timestamp: new Date().toISOString() 
-    }]);
-
-    if (shareType !== 'live') {
-        const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${track.id}`;
-        await Clipboard.setStringAsync(url);
-        Alert.alert('Location Shared', `Your ${shareType} location link has been copied to clipboard.`);
-        fetchPastJourneys();
-        return;
-    }
-
-    setTrackId(track.id);
-    setCurrentExpiresAt(expiresAt);
-    setIsTracking(true);
-    startTimeRef.current = Date.now();
-    setPoints([{ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 }]);
-    setCurrentPoint({ lat: initialLocation.coords.latitude, lng: initialLocation.coords.longitude, timestamp: Date.now()/1000 });
-    
-    timerRef.current = setInterval(() => {
-      if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 1000);
-
-    locationSubscription.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
-      async (loc) => {
-        const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
-        setCurrentPoint(newPoint);
-        setPoints(prev => [...prev, newPoint]);
-        fetchAddress(newPoint.lat, newPoint.lng);
-        await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
-        await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
-      }
-    );
   };
 
   const stopTracking = async () => {
@@ -421,7 +464,15 @@ export default function HomeScreen() {
                                  <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
                                  <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'bachelor-party'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" autoCapitalize="none" />
                             </View>
-                            <Button onPress={startTracking} className="w-full"><Text className="text-white font-bold">Start New Journey</Text></Button>
+                            <Button 
+                                onPress={startTracking} 
+                                className="w-full"
+                                disabled={isStarting}
+                            >
+                                <Text className="text-white font-bold">
+                                    {isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}
+                                </Text>
+                            </Button>
                         </View>
                     ) : (
                         <View className="gap-4">
