@@ -334,9 +334,9 @@ export default function HomeScreen() {
             {/* Header */}
             <View className="mb-6 flex-row items-center justify-between">
               <View>
-                <Text className="text-3xl font-bold text-gray-900 dark:text-white">GPS Tracker</Text>
+                <Text className="text-3xl font-bold text-gray-900 dark:text-white">Family Locator</Text>
                 <View className="flex-row items-center gap-2">
-                    <Text className="text-gray-500 dark:text-gray-400">{isTracking ? '🟢 Tracking Active' : 'Ready to start'}</Text>
+                    <Text className="text-gray-500 dark:text-gray-400">{isTracking ? '🟢 Location Live' : 'Ready to check-in'}</Text>
                     {isTracking && viewerCount > 0 && (
                         <View className="bg-blue-100 dark:bg-blue-900 px-2 py-0.5 rounded-full flex-row items-center gap-1">
                             <Ionicons name="eye-outline" size={12} color="#2563eb" />
@@ -440,8 +440,8 @@ export default function HomeScreen() {
                                  <TextInput value={shareNote} onChangeText={setShareNote} placeholder="e.g. 'Meeting at the park!'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />
                             </View>
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Fleet / Party Code (Optional)</Text>
-                                 <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'bachelor-party'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600 autoCapitalize='none'" />
+                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Family Circle Code (Optional)</Text>
+                                 <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'the-smiths'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600 autoCapitalize='none'" />
                             </View>
                             <Button onPress={startTracking} className="w-full" disabled={isStarting}>
                                 <Text className="text-white font-bold">{isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}</Text>
