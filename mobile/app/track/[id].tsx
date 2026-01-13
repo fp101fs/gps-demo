@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, Linking, useWindowDimensions, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
@@ -17,6 +17,7 @@ type AccessStatus = 'checking' | 'allowed' | 'denied_privacy' | 'needs_password'
 
 export default function SharedTrackScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { user, isSignedIn, isLoaded: isUserLoaded } = useUser();
   const { colorScheme } = useColorScheme();
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
@@ -294,7 +295,7 @@ export default function SharedTrackScreen() {
                             <View className="flex-row justify-between mb-2"><Text className="text-gray-500 text-sm">Started</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{createdAt ? new Date(createdAt).toLocaleTimeString() : '--'}</Text></View>
                             <View className="flex-row justify-between"><Text className="text-gray-500 text-sm">Points</Text><Text className="text-gray-900 dark:text-white text-sm font-medium">{points.length}</Text></View>
                         </View>
-                        <Button onPress={() => Linking.openURL(Linking.createURL('/'))} className="w-full"><Text className="text-white font-bold">Back to Home</Text></Button>
+                        <Button onPress={() => router.replace('/')} className="w-full"><Text className="text-white font-bold">Back to Home</Text></Button>
                     </View>
                 </View>
             )}
