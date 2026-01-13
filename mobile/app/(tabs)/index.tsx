@@ -47,6 +47,8 @@ export default function HomeScreen() {
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  const [currentExpiresAt, setCurrentExpiresAt] = useState<string | null>(null);
   
   // Share Settings State
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
@@ -72,16 +74,32 @@ export default function HomeScreen() {
       fetchUnreadCount();
       
       // Demo: Send a welcome notification if none exist
-      // In a real app, this would be done by a backend trigger
-      const checkAndWelcome = async () => {
-          const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-          if (count === 0) {
-              await Notifications.send(user.id, 'Welcome to GPS Demo!', 'Start tracking your journey or join a fleet to get started.', 'success');
-          }
-      };
-      checkAndWelcome();
-    }
+// ... (rest of the welcome effect)
   }, [user]);
+
+  // Expiration Timer for Host
+  useEffect(() => {
+      if (!currentExpiresAt || !isTracking) {
+          setTimeLeft(null);
+          return;
+      }
+
+      const updateTimer = () => {
+          const diff = new Date(currentExpiresAt).getTime() - Date.now();
+          if (diff <= 0) {
+              setTimeLeft('Expired');
+              stopTracking(); // Auto-stop tracking when time is up
+              return;
+          }
+          const mins = Math.floor(diff / 60000);
+          const secs = Math.floor((diff % 60000) / 1000);
+          setTimeLeft(`${mins}m ${secs}s`);
+      };
+
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+  }, [currentExpiresAt, isTracking]);
 
   // Proximity Check Logic
   useEffect(() => {
@@ -277,6 +295,7 @@ export default function HomeScreen() {
     }
 
     setTrackId(track.id);
+    setCurrentExpiresAt(expiresAt);
     setIsTracking(true);
     startTimeRef.current = Date.now();
     setPoints([]);
@@ -472,6 +491,12 @@ export default function HomeScreen() {
                           <View>
                               <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
                               <Text className="text-xl font-bold font-monospaced text-black dark:text-white">{formatDuration(duration)}</Text>
+                              {timeLeft && (
+                                  <View className="flex-row items-center gap-1 mt-1">
+                                      <Ionicons name="time-outline" size={10} color="#6b7280" />
+                                      <Text className="text-[10px] text-gray-500 font-bold uppercase">Expires: {timeLeft}</Text>
+                                  </View>
+                              )}
                           </View>
                           <View className="items-end">
                               {viewerCount > 0 && (
