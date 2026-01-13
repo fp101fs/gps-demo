@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
@@ -16,6 +16,7 @@ import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
 import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
 
 // Types
 interface Journey {
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const [viewerCount, setViewerCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [currentExpiresAt, setCurrentExpiresAt] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
   
   // Share Settings State
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
@@ -458,11 +460,16 @@ export default function HomeScreen() {
             </TouchableOpacity>
 
             {isTracking && (
-                <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
-                    <Text className={copied ? "text-green-600" : "text-blue-600 dark:text-blue-400"}>
-                        {copied ? 'Copied!' : 'Share'}
-                    </Text>
-                </Button>
+                <View className="flex-row gap-2">
+                    <Button variant="outline" size="sm" onPress={() => setShowQR(true)} className="px-2">
+                        <Ionicons name="qr-code-outline" size={18} color={colorScheme === 'dark' ? 'white' : 'black'} />
+                    </Button>
+                    <Button variant={copied ? "secondary" : "outline"} size="sm" onPress={shareJourney}>
+                        <Text className={copied ? "text-green-600" : "text-blue-600 dark:text-blue-400"}>
+                            {copied ? 'Copied!' : 'Share'}
+                        </Text>
+                    </Button>
+                </View>
             )}
             {user && (
                 <Button variant="ghost" size="sm" onPress={() => signOut()}>
@@ -685,6 +692,36 @@ export default function HomeScreen() {
         ))}
 
       </ScrollView>
+
+      {/* QR Code Modal */}
+      <Modal
+        visible={showQR}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowQR(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50 p-6">
+            <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
+                <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Scan to Follow</Text>
+                <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">
+                    Show this code to anyone you want to share your live journey with.
+                </Text>
+                
+                <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100">
+                    <QRCode
+                        value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://gps-demo.vercel.app'}
+                        size={200}
+                        color="black"
+                        backgroundColor="white"
+                    />
+                </View>
+
+                <Button onPress={() => setShowQR(false)} className="w-full">
+                    <Text className="text-white font-bold">Done</Text>
+                </Button>
+            </View>
+        </View>
+      </Modal>
     </View>
   );
 }
