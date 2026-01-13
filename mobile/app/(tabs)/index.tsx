@@ -468,18 +468,18 @@ export default function HomeScreen() {
                 {/* Overlay Stats (iOS Style Blur) */}
                 {isTracking && (
                   <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
-                      {viewerCount > 0 && (
-                          <View className="absolute -top-2 -right-2 bg-blue-600 px-2 py-1 rounded-lg flex-row items-center gap-1 shadow-sm z-20">
-                              <Ionicons name="eye" size={12} color="white" />
-                              <Text className="text-white text-[10px] font-bold">{viewerCount} Viewer{viewerCount !== 1 ? 's' : ''}</Text>
-                          </View>
-                      )}
-                      <View className="flex-row justify-between">
+                      <View className="flex-row justify-between items-start">
                           <View>
                               <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
                               <Text className="text-xl font-bold font-monospaced text-black dark:text-white">{formatDuration(duration)}</Text>
                           </View>
                           <View className="items-end">
+                              {viewerCount > 0 && (
+                                  <View className="bg-blue-600 px-2 py-0.5 rounded-md flex-row items-center gap-1 mb-1">
+                                      <Ionicons name="eye" size={10} color="white" />
+                                      <Text className="text-white text-[9px] font-bold uppercase">{viewerCount} Viewer{viewerCount !== 1 ? 's' : ''}</Text>
+                                  </View>
+                              )}
                               <Text className="text-xs font-semibold uppercase text-gray-400">Points</Text>
                               <Text className="text-xl font-bold text-black dark:text-white">{points.length}</Text>
                           </View>
