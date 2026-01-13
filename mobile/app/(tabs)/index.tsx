@@ -66,6 +66,7 @@ export default function HomeScreen() {
   const [tempPrivacyMode, setTempPrivacyMode] = useState<'link' | 'private'>('link');
   const [tempAllowedEmails, setTempAllowedEmails] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState('');
+  const [passwordEnabled, setPasswordEnabled] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
 
   const [proximityEnabled, setProximityEnabled] = useState(false);
@@ -285,7 +286,7 @@ export default function HomeScreen() {
       await supabase.from('tracks').update({
           privacy_mode: tempPrivacyMode,
           allowed_emails: tempAllowedEmails,
-          password: tempPassword || null
+          password: passwordEnabled ? (tempPassword || null) : null
       }).eq('id', trackId);
 
       const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
@@ -517,11 +518,30 @@ export default function HomeScreen() {
 
                 {/* Password Protection */}
                 <View className="mb-8">
-                    <Text className="text-sm font-bold text-gray-500 uppercase mb-3 text-[10px]">Password Protection (Optional)</Text>
-                    <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <Ionicons name="lock-closed-outline" size={20} color="#6b7280" className="mr-2" />
-                        <TextInput value={tempPassword} onChangeText={setTempPassword} placeholder="Enter a password" placeholderTextColor="#9ca3af" className="flex-1 dark:text-white" secureTextEntry />
+                    <View className="flex-row items-center justify-between mb-3">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="lock-closed-outline" size={18} color="#6b7280" />
+                            <Text className="text-sm font-bold text-gray-500 uppercase text-[10px]">Password Protection</Text>
+                        </View>
+                        <Switch 
+                            value={passwordEnabled} 
+                            onValueChange={setPasswordEnabled}
+                            trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                        />
                     </View>
+                    
+                    {passwordEnabled && (
+                        <View className="flex-row items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <TextInput 
+                                value={tempPassword} 
+                                onChangeText={setTempPassword} 
+                                placeholder="Set a password" 
+                                placeholderTextColor="#9ca3af" 
+                                className="flex-1 dark:text-white" 
+                                secureTextEntry 
+                            />
+                        </View>
+                    )}
                 </View>
 
                 <Button onPress={confirmShare} className="w-full h-14"><Text className="text-white font-bold text-lg">Confirm & Share Link</Text></Button>
