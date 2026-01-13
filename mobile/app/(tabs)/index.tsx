@@ -207,7 +207,14 @@ export default function HomeScreen() {
           const count = Object.keys(state).length;
           setViewerCount(Math.max(0, count - 1)); // -1 for the host
       })
-      .subscribe();
+      .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+              await channel.track({
+                  online_at: new Date().toISOString(),
+                  role: 'host'
+              });
+          }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -461,6 +468,12 @@ export default function HomeScreen() {
                 {/* Overlay Stats (iOS Style Blur) */}
                 {isTracking && (
                   <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
+                      {viewerCount > 0 && (
+                          <View className="absolute -top-2 -right-2 bg-blue-600 px-2 py-1 rounded-lg flex-row items-center gap-1 shadow-sm z-20">
+                              <Ionicons name="eye" size={12} color="white" />
+                              <Text className="text-white text-[10px] font-bold">{viewerCount} Viewer{viewerCount !== 1 ? 's' : ''}</Text>
+                          </View>
+                      )}
                       <View className="flex-row justify-between">
                           <View>
                               <Text className="text-xs font-semibold uppercase text-gray-400">Duration</Text>
