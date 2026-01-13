@@ -185,6 +185,16 @@ export default function SharedTrackScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [id, accessStatus]);
 
+  // Auto-stop guest sharing if host stops
+  useEffect(() => {
+    if (!isActive && isSharing && shareType === 'live') {
+        stopSharingBack();
+        Alert.alert('Sharing Ended', 'The host has stopped sharing, so your location is no longer being shared back.');
+    }
+  }, [isActive, isSharing, shareType]);
+
+  // Proximity & Arrival Logic for Viewer
+
   useEffect(() => {
     if (!isSharing || !currentLoc || points.length === 0) return;
     const hostPoint = points[points.length - 1];
