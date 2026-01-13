@@ -68,18 +68,27 @@ export default function HomeScreen() {
 
   const fetchUnreadCount = async () => {
       if (!user) return;
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
       
-      setUnreadCount(count || 0);
+      const getCount = async () => {
+          const { count } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('is_read', false);
+          setUnreadCount(count || 0);
+      };
+
+      getCount();
       
-      // Subscribe to count changes
+      // Subscribe to all changes to keep count in sync (new msg, marked read, etc)
       const channel = supabase.channel('unread_count')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, 
-            () => setUnreadCount(c => c + 1))
+        .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, 
+            () => {
+                // Simple strategy: refetch accurate count on any change
+                getCount();
+            }
+        )
         .subscribe();
         
       return () => supabase.removeChannel(channel);
@@ -322,7 +331,7 @@ export default function HomeScreen() {
             <TouchableOpacity onPress={() => router.push('/notifications')} className="mr-2 relative">
                 <Ionicons name="notifications-outline" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} />
                 {unreadCount > 0 && (
-                    <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full justify-center items-center">
+                    <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full justify-center items-center z-10">
                         <Text className="text-white text-[10px] font-bold">{unreadCount}</Text>
                     </View>
                 )}
