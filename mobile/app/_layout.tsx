@@ -22,7 +22,11 @@ WebBrowser.maybeCompleteAuthSession();
 function SignInScreen() {
     const handleGoogleSignIn = async () => {
       try {
-        const redirectTo = Linking.createURL('/');
+        // Use a clean URL for redirects
+        const redirectTo = Platform.OS === 'web' 
+          ? window.location.origin 
+          : Linking.createURL('/');
+          
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
@@ -36,7 +40,13 @@ function SignInScreen() {
 
         if (error) throw error;
         if (data.url) {
-          await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+          if (Platform.OS === 'web') {
+            // On web, simple redirect is most reliable
+            window.location.href = data.url;
+          } else {
+            // On native, use the auth session handler
+            await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+          }
         }
       } catch (err) {
         console.error("Auth error", err);
