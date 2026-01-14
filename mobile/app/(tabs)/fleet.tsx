@@ -26,7 +26,6 @@ export default function FleetScreen() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
   const { code: inviteCode } = useLocalSearchParams<{ code?: string }>();
-  const { width } = useWindowDimensions();
   
   const [fleetCode, setFleetCode] = useState('');
   const [activeCode, setActiveCode] = useState<string | null>(null);
@@ -35,26 +34,68 @@ export default function FleetScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Password Protection State
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [correctPassword, setCorrectPassword] = useState<string | null>(null);
+  const [enteredPassword, setEnteredPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+
   // 1. Persistence & Auto-join Logic
   useEffect(() => {
     const init = async () => {
-        // Priority 1: Invite code from URL
-        if (inviteCode) {
-            setFleetCode(inviteCode);
-            setActiveCode(inviteCode);
-            await SecureStore.setItemAsync('last_fleet_code', inviteCode);
-            return;
-        }
-
-        // Priority 2: Last used code from storage
         const saved = await SecureStore.getItemAsync('last_fleet_code');
-        if (saved) {
-            setFleetCode(saved);
-            setActiveCode(saved);
+        const initialCode = inviteCode || saved;
+        
+        if (initialCode) {
+            setFleetCode(initialCode);
+            // If it's a known code, try to connect automatically
+            connectToCircle(initialCode);
         }
     };
     init();
   }, [inviteCode]);
+
+  const connectToCircle = async (code: string) => {
+      if (!code) return;
+      setLoading(true);
+      
+      try {
+          // Check if the circle exists and has a password
+          const { data, error } = await supabase
+            .from('tracks')
+            .select('password')
+            .eq('party_code', code)
+            .eq('is_active', true)
+            .not('password', 'is', null)
+            .limit(1);
+
+          if (data && data.length > 0) {
+              // Circle is password protected
+              setCorrectPassword(data[0].password);
+              setNeedsPassword(true);
+              setLoading(false);
+              return;
+          }
+
+          // No password or new circle, join directly
+          setActiveCode(code);
+          await SecureStore.setItemAsync('last_fleet_code', code);
+      } catch (e) {
+          console.error(e);
+      }
+      setLoading(false);
+  };
+
+  const verifyPassword = async () => {
+      if (enteredPassword === correctPassword) {
+          setNeedsPassword(false);
+          setActiveCode(fleetCode);
+          await SecureStore.setItemAsync('last_fleet_code', fleetCode);
+          setPasswordError(false);
+      } else {
+          setPasswordError(true);
+      }
+  };
 
   useEffect(() => {
     if (!activeCode) return;
@@ -112,12 +153,6 @@ export default function FleetScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [activeCode]);
 
-  const handleConnect = async () => {
-      if (!fleetCode) return;
-      setActiveCode(fleetCode);
-      await SecureStore.setItemAsync('last_fleet_code', fleetCode);
-  };
-
   const handleExit = async () => {
       setActiveCode(null);
       setMembers([]);
@@ -130,15 +165,50 @@ export default function FleetScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       if (Platform.OS !== 'web') {
-          await Share.share({ message: `Join my Family Circle on GPS Demo! Click here: ${url}`, url });
+          await Share.share({ message: `Join my Family Circle on Family Locator! Click here: ${url}`, url });
       }
   };
+
+  if (needsPassword) {
+      return (
+          <View className="flex-1 bg-white dark:bg-black p-6 justify-center items-center">
+              <View style={{ width: '100%', maxWidth: 400 }} className="items-center">
+                <View className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full mb-6">
+                    <Ionicons name="shield-checkmark" size={48} color="#2563eb" />
+                </View>
+                <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Password Required</Text>
+                <Text className="text-gray-500 dark:text-gray-400 text-center mb-8">The Family Circle "#{fleetCode}" is protected. Please enter the password to join.</Text>
+                
+                <TextInput 
+                    value={enteredPassword} 
+                    onChangeText={(text) => { setEnteredPassword(text); setPasswordError(false); }} 
+                    placeholder="Circle Password" 
+                    placeholderTextColor="#9ca3af"
+                    className={`w-full bg-gray-50 dark:bg-gray-800 dark:text-white p-4 rounded-xl border mb-4 text-center text-lg ${passwordError ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}`}
+                    secureTextEntry 
+                />
+                
+                {passwordError && <Text className="text-red-500 mb-4">Incorrect password. Please try again.</Text>}
+                
+                <Button onPress={verifyPassword} className="w-full h-14">
+                    <Text className="text-white font-bold text-lg">Join Circle</Text>
+                </Button>
+                
+                <TouchableOpacity onPress={() => setNeedsPassword(false)} className="mt-6">
+                    <Text className="text-gray-400 font-medium">Cancel</Text>
+                </TouchableOpacity>
+              </View>
+          </View>
+      );
+  }
 
   const sosMembers = members.filter(m => m.isSos);
 
   return (
     <View className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
-      {!activeCode ? (
+      {loading && !activeCode && <View className="flex-1 items-center justify-center"><ActivityIndicator color="#2563eb" /></View>}
+      
+      {!activeCode && !loading ? (
         <View className="flex-1 p-4 justify-center items-center">
              <View style={{ width: '100%', maxWidth: 400 }}>
                 <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join Family Circle</Text>
@@ -153,12 +223,12 @@ export default function FleetScreen() {
                     autoCapitalize="none"
                 />
                 
-                <Button onPress={handleConnect} className="w-full">
+                <Button onPress={() => connectToCircle(fleetCode)} className="w-full">
                     <Text className="text-white font-bold">Connect to Family</Text>
                 </Button>
              </View>
         </View>
-      ) : (
+      ) : activeCode && (
         <View className="flex-1">
             <View className="absolute top-12 left-4 right-4 z-10 gap-2 items-center">
                  <View className="flex-row gap-2 w-full max-w-2xl">
