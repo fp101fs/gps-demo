@@ -388,25 +388,26 @@ export default function HomeScreen() {
 
   const confirmShare = async () => {
       if (!trackId) return;
-      await supabase.from('tracks').update({ 
-          privacy_mode: tempPrivacyMode, 
-          allowed_emails: tempAllowedEmails, 
-          password: passwordEnabled ? (tempPassword || null) : null 
-      }).eq('id', trackId);
-      
+      await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
+      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
+      await Clipboard.setStringAsync(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
       setShareModalVisible(false);
       setShareSuccessVisible(true);
-      fetchPastJourneys();
+      if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
   };
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
-      <Head>
-        <title>FindMyFam - Family Safety & Locator</title>
-        <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
-        <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
-        <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
-      </Head>
+      {Platform.OS === 'web' && (
+        <Head>
+            <title>FindMyFam - Family Safety & Locator</title>
+            <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
+            <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
+            <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
+        </Head>
+      )}
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100, alignItems: 'center' }}>
         <View style={{ width: '100%', maxWidth: 800 }}>
             {/* Header */}
@@ -510,7 +511,7 @@ export default function HomeScreen() {
                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
                                 <View className="flex-row gap-2">
                                     {(['live', 'current', 'address'] as const).map((type) => (
-                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
+                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
                                             <Text className={cn("text-[10px] font-bold uppercase", shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300")}>{type}</Text>
                                         </TouchableOpacity>
                                     ))}
@@ -521,7 +522,7 @@ export default function HomeScreen() {
                                      <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
                                      <View className="flex-row gap-2 mb-2">
                                         {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
-                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
+                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
                                                 <Text className={cn("text-xs font-bold", durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300")}>{opt}</Text>
                                             </TouchableOpacity>
                                         ))}
@@ -625,8 +626,8 @@ export default function HomeScreen() {
                     <Text className="text-gray-900 dark:text-white font-medium mb-1" numberOfLines={2}>{shareType === 'address' ? address : `GPS: ${currentPoint?.lat.toFixed(6)}, ${currentPoint?.lng.toFixed(6)}`}</Text>
                     <Text className="text-gray-500 dark:text-gray-400 text-[10px]">{shareType === 'live' ? 'Updating in real-time' : 'Fixed point shared'}</Text>
                 </View>
-                <View className="items-center mb-6"><View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><QRCode value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`} size={160} color="black" backgroundColor="white" /></View><Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text></View>
-                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}</Text><TouchableOpacity onPress={() => confirmShare()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
+                <View className="items-center mb-6"><View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'} size={160} color="black" backgroundColor="white" /></View><Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text></View>
+                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'}</Text><TouchableOpacity onPress={() => confirmShare()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
             </View>
         </View>
       </Modal>
@@ -636,7 +637,7 @@ export default function HomeScreen() {
             <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
                 <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Scan to Follow</Text>
                 <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">Show this code to anyone you want to share your live journey with.</Text>
-                <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://gps-demo.vercel.app'} size={200} color="black" backgroundColor="white" /></View>
+                <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'} size={200} color="black" backgroundColor="white" /></View>
                 <Button onPress={() => setShowQR(false)} className="w-full"><Text className="text-white font-bold">Done</Text></Button>
             </View>
         </View>
@@ -716,4 +717,3 @@ export default function HomeScreen() {
           </View>
         );
       }
-      

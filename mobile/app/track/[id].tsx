@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity, Linking } from 'react-native';
-import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter, Head } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
@@ -279,6 +279,15 @@ export default function SharedTrackScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black items-center">
+      {Platform.OS === 'web' && (
+        <Head>
+            <title>FindMyFam - Live Location</title>
+            <meta property="og:title" content="Follow my live journey on FindMyFam" />
+            <meta property="og:description" content="Real-time family safety and location tracking." />
+            <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
+            <meta name="twitter:card" content="summary_large_image" />
+        </Head>
+      )}
       <Stack.Screen options={{ 
           title: shareType === 'live' ? (isActive ? '🔴 Live Journey' : 'Past Journey') : 
                  shareType === 'current' ? '📍 Pinned Location' : '🏠 Shared Address' 
@@ -341,7 +350,7 @@ export default function SharedTrackScreen() {
 
             {(note || timeLeft) && isActive && shareType === 'live' && (
                 <View className="absolute top-4 left-4 right-4 z-10 items-center">
-                    <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full max-md">
+                    <View className="bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm w-full max-w-md">
                         {note && <View className="flex-row items-center gap-2 mb-1"><Ionicons name="chatbubble-outline" size={16} color="#2563eb" /><Text className="text-gray-900 dark:text-white font-medium flex-1">{note}</Text></View>}
                         {timeLeft && <View className="flex-row items-center gap-2"><Ionicons name="time-outline" size={16} color="#6b7280" /><Text className="text-gray-500 dark:text-gray-400 text-xs">{timeLeft === 'Expired' ? 'Sharing has ended' : `Expires in: ${timeLeft}`}</Text></View>}
                     </View>
