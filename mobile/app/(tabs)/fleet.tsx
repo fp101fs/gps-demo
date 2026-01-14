@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, useWindowDimensions, Platform, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import Map from '@/components/Map';
 import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
+import { useLocalSearchParams } from 'expo-router';
+import QRCode from 'react-native-qrcode-svg';
 
 interface FleetMember {
   id: string;
@@ -13,16 +18,43 @@ interface FleetMember {
   lng: number;
   avatarUrl?: string;
   user_id: string;
+  nickname?: string;
   isSos?: boolean;
 }
 
 export default function FleetScreen() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
+  const { code: inviteCode } = useLocalSearchParams<{ code?: string }>();
+  const { width } = useWindowDimensions();
+  
   const [fleetCode, setFleetCode] = useState('');
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [members, setMembers] = useState<FleetMember[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // 1. Persistence & Auto-join Logic
+  useEffect(() => {
+    const init = async () => {
+        // Priority 1: Invite code from URL
+        if (inviteCode) {
+            setFleetCode(inviteCode);
+            setActiveCode(inviteCode);
+            await SecureStore.setItemAsync('last_fleet_code', inviteCode);
+            return;
+        }
+
+        // Priority 2: Last used code from storage
+        const saved = await SecureStore.getItemAsync('last_fleet_code');
+        if (saved) {
+            setFleetCode(saved);
+            setActiveCode(saved);
+        }
+    };
+    init();
+  }, [inviteCode]);
 
   useEffect(() => {
     if (!activeCode) return;
@@ -31,7 +63,7 @@ export default function FleetScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tracks')
-        .select('id, lat, lng, avatar_url, user_id, is_sos')
+        .select('id, lat, lng, avatar_url, user_id, is_sos, nickname')
         .eq('party_code', activeCode)
         .eq('is_active', true)
         .not('lat', 'is', null)
@@ -46,7 +78,8 @@ export default function FleetScreen() {
             lng: m.lng,
             avatarUrl: m.avatar_url,
             user_id: m.user_id,
-            isSos: m.is_sos
+            isSos: m.is_sos,
+            nickname: m.nickname
         })));
       }
       setLoading(false);
@@ -58,12 +91,7 @@ export default function FleetScreen() {
       .channel(`fleet_${activeCode}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tracks',
-          filter: `party_code=eq.${activeCode}`,
-        },
+        { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${activeCode}` },
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
@@ -71,70 +99,88 @@ export default function FleetScreen() {
                  setMembers(prev => prev.filter(p => p.id !== m.id));
                  return;
              }
-             
              setMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) {
-                     return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos } : p);
-                 } else {
-                     return [...prev, {
-                        id: m.id,
-                        lat: m.lat,
-                        lng: m.lng,
-                        avatarUrl: m.avatar_url,
-                        user_id: m.user_id,
-                        isSos: m.is_sos
-                     }];
-                 }
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname }];
              });
           }
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [activeCode]);
+
+  const handleConnect = async () => {
+      if (!fleetCode) return;
+      setActiveCode(fleetCode);
+      await SecureStore.setItemAsync('last_fleet_code', fleetCode);
+  };
+
+  const handleExit = async () => {
+      setActiveCode(null);
+      setMembers([]);
+      await SecureStore.deleteItemAsync('last_fleet_code');
+  };
+
+  const shareInvite = async () => {
+      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`;
+      await Clipboard.setStringAsync(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      if (Platform.OS !== 'web') {
+          await Share.share({ message: `Join my Family Circle on GPS Demo! Click here: ${url}`, url });
+      }
+  };
 
   const sosMembers = members.filter(m => m.isSos);
 
   return (
     <View className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
       {!activeCode ? (
-        <View className="flex-1 p-4 justify-center">
-             <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join Family Circle</Text>
-             <Text className="text-gray-500 dark:text-gray-400 mb-6">Enter your family code to see everyone on the map.</Text>
-             
-             <TextInput 
-                value={fleetCode}
-                onChangeText={setFleetCode}
-                placeholder="Enter Family Code"
-                placeholderTextColor="#9ca3af"
-                className="bg-gray-100 dark:bg-gray-800 dark:text-white p-4 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 text-lg"
-                autoCapitalize="none"
-             />
-             
-             <Button onPress={() => setActiveCode(fleetCode)} className="w-full">
-                 <Text className="text-white font-bold">Connect to Family</Text>
-             </Button>
+        <View className="flex-1 p-4 justify-center items-center">
+             <View style={{ width: '100%', maxWidth: 400 }}>
+                <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join Family Circle</Text>
+                <Text className="text-gray-500 dark:text-gray-400 mb-6">Enter your family code to see everyone on the map.</Text>
+                
+                <TextInput 
+                    value={fleetCode}
+                    onChangeText={setFleetCode}
+                    placeholder="Enter Family Code"
+                    placeholderTextColor="#9ca3af"
+                    className="bg-gray-100 dark:bg-gray-800 dark:text-white p-4 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 text-lg"
+                    autoCapitalize="none"
+                />
+                
+                <Button onPress={handleConnect} className="w-full">
+                    <Text className="text-white font-bold">Connect to Family</Text>
+                </Button>
+             </View>
         </View>
       ) : (
         <View className="flex-1">
-            <View className="absolute top-12 left-4 right-4 z-10 gap-2">
-                 <View className="flex-row gap-2">
+            <View className="absolute top-12 left-4 right-4 z-10 gap-2 items-center">
+                 <View className="flex-row gap-2 w-full max-w-2xl">
                     <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
-                        <Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text>
-                        <Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text>
-                        <Text className="text-xs text-blue-600 dark:text-blue-400">{members.length} members online</Text>
+                        <View className="flex-row justify-between items-center">
+                            <View>
+                                <Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text>
+                                <Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg">
+                                <Ionicons name="person-add" size={20} color="#2563eb" />
+                            </TouchableOpacity>
+                        </View>
+                        <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
                     </View>
-                    <Button variant="destructive" className="h-full" onPress={() => { setActiveCode(null); setMembers([]); }}>
-                        <Text className="text-white font-bold">Exit</Text>
+                    <Button variant="destructive" className="h-full px-4" onPress={handleExit}>
+                        <Ionicons name="exit-outline" size={20} color="white" />
                     </Button>
                  </View>
 
                  {sosMembers.length > 0 && (
-                     <View className="bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
+                     <View className="w-full max-w-2xl bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
                          <Ionicons name="warning" size={28} color="white" />
                          <View className="flex-1">
                              <Text className="text-white font-black text-lg uppercase">Emergency SOS!</Text>
@@ -153,6 +199,38 @@ export default function FleetScreen() {
             />
         </View>
       )}
+
+      {/* Invite Modal */}
+      <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
+          <View className="flex-1 justify-center items-center bg-black/50 p-6">
+              <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
+                  <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invite to Circle</Text>
+                  <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">
+                      Have your family scan this code or use the link below to join #{activeCode} instantly.
+                  </Text>
+                  
+                  <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100">
+                      <QRCode
+                          value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`}
+                          size={180}
+                          color="black"
+                          backgroundColor="white"
+                      />
+                  </View>
+
+                  <TouchableOpacity onPress={shareInvite} className="w-full bg-gray-100 dark:bg-gray-800 p-4 rounded-xl flex-row justify-between items-center mb-4">
+                      <Text className="text-blue-600 dark:text-blue-400 font-bold" numberOfLines={1}>
+                          {copied ? 'Link Copied!' : 'Copy Invite Link'}
+                      </Text>
+                      <Ionicons name={copied ? "checkmark" : "copy-outline"} size={20} color="#2563eb" />
+                  </TouchableOpacity>
+
+                  <Button onPress={() => setShowInviteModal(false)} className="w-full h-12">
+                      <Text className="text-white font-bold">Close</Text>
+                  </Button>
+              </View>
+          </View>
+      </Modal>
     </View>
   );
 }
