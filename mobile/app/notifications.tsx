@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { useUser } from '@clerk/clerk-expo';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { Notifications } from '@/lib/notifications';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -18,7 +18,7 @@ interface Notification {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useUser();
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 

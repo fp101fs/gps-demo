@@ -10,7 +10,6 @@
     "build": "npx expo export -p web"
   },
   "dependencies": {
-    "@clerk/clerk-expo": "^2.19.17",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.90.1",

@@ -2,10 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity, Linking } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
 import { Button } from '@/components/ui/Button';
-import { useUser, useOAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import { useColorScheme } from 'nativewind';
@@ -18,9 +18,10 @@ type AccessStatus = 'checking' | 'allowed' | 'denied_privacy' | 'needs_password'
 export default function SharedTrackScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user, isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
+  const isUserLoaded = true; // Supabase loading is handled by the loading state below
   const { colorScheme } = useColorScheme();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024;
   
@@ -60,13 +61,8 @@ export default function SharedTrackScreen() {
   
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
-  const onSignInPress = async () => {
-    try {
-      const { createdSessionId, setActive } = await startOAuthFlow({
-        redirectUrl: Platform.OS === 'web' ? window.location.href : 'findmyfam://track/' + id,
-      });
-      if (createdSessionId && setActive) await setActive({ session: createdSessionId });
-    } catch (err) { console.error(err); }
+  const onSignInPress = () => {
+    router.replace('/');
   };
 
   const fetchAddress = async (lat: number, lng: number) => {
@@ -78,7 +74,7 @@ export default function SharedTrackScreen() {
   };
 
   useEffect(() => {
-    if (!id || !isUserLoaded) return;
+    if (!id) return;
 
     const fetchInitialData = async () => {
       try {
@@ -97,7 +93,7 @@ export default function SharedTrackScreen() {
                 setLoading(false);
                 return;
             }
-            const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+            const userEmail = user?.email?.toLowerCase();
             if (!track.allowed_emails?.includes(userEmail)) {
                 setAccessStatus('denied_privacy');
                 setLoading(false);
@@ -144,7 +140,7 @@ export default function SharedTrackScreen() {
            setIsSos(payload.new.is_sos);
     }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() }); });
     return () => { supabase.removeChannel(channel); };
-  }, [id, isSignedIn, isUserLoaded]);
+  }, [id, isSignedIn, user]);
 
   const checkPassword = () => {
       if (enteredPassword === correctPassword) {
@@ -181,7 +177,7 @@ export default function SharedTrackScreen() {
              setAdHocMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
                  if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos }];
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos }];
              });
           }
     }).subscribe();
@@ -217,7 +213,7 @@ export default function SharedTrackScreen() {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return Alert.alert('Denied', 'Allow location access.');
     const { data: track, error } = await supabase.from('tracks').insert([{ 
-        is_active: true, user_id: user.id, avatar_url: user.imageUrl, party_code: id,
+        is_active: true, user_id: user.id, avatar_url: user.user_metadata.avatar_url, party_code: id,
         proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
         arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50
     }]).select().single();
@@ -235,7 +231,7 @@ export default function SharedTrackScreen() {
     setIsSharing(false); setMyTrackId(null); setCurrentLoc(null);
   };
 
-  if (loading || !isUserLoaded) return <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black"><ActivityIndicator size="large" color="#2563eb" /></View>;
+  if (loading) return <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black"><ActivityIndicator size="large" color="#2563eb" /></View>;
   if (error) return <View className="flex-1 items-center justify-center p-4 bg-gray-50 dark:bg-black"><Text className="text-red-500 text-center">{error}</Text></View>;
 
   if (accessStatus === 'denied_privacy') {
@@ -247,7 +243,7 @@ export default function SharedTrackScreen() {
               {!isSignedIn ? (
                   <Button onPress={onSignInPress} className="w-full h-14"><Text className="text-white font-bold">Sign in to Check Access</Text></Button>
               ) : (
-                  <Text className="text-gray-400 italic">Signed in as {user?.primaryEmailAddress?.emailAddress}</Text>
+                  <Text className="text-gray-400 italic">Signed in as {user?.email}</Text>
               )}
           </View>
       );
