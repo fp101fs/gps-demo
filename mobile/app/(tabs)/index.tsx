@@ -16,6 +16,7 @@ import type { Point, SafeZone } from '@/components/Map';
 import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
+import * as SecureStore from 'expo-secure-store';
 
 interface Journey {
   id: string;
@@ -48,7 +49,7 @@ export default function HomeScreen() {
   const [copied, setCopied] = useState(false);
   const [useProfileIcon, setUseProfileIcon] = useState(false);
   const [fleetCode, setFleetCode] = useState('');
-  const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[]>([]);
+  const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean; nickname?: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
@@ -260,8 +261,8 @@ export default function HomeScreen() {
              }
              setAdHocMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos }];
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname }];
              });
           }
       })
@@ -307,14 +308,12 @@ export default function HomeScreen() {
         const lng = initialLocation.coords.longitude;
         setCurrentPoint({ lat, lng, timestamp: Date.now() / 1000 });
 
-        if (shareType === 'address' || shareType === 'current') {
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-                const data = await res.json();
-                const addr = data.display_name;
-                if (addr) { setAddress(addr); if (shareType === 'address') finalNote = (shareNote ? shareNote + " - " : "") + addr; }
-            } catch (e) {}
-        }
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+            const addr = data.display_name;
+            if (addr) { setAddress(addr); if (shareType === 'address') finalNote = (shareNote ? shareNote + " - " : "") + addr; }
+        } catch (e) {}
 
         const { data: track, error } = await supabase.from('tracks').insert([{ 
             is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
@@ -328,27 +327,28 @@ export default function HomeScreen() {
         await supabase.from('points').insert([{ track_id: track.id, lat: lat, lng: lng, timestamp: new Date().toISOString() }]);
 
         setTrackId(track.id);
-        if (shareType !== 'live') { setIsStarting(false); setShareModalVisible(true); return; }
-
-        setCurrentExpiresAt(expiresAt);
-        setIsTracking(true);
         setIsStarting(false);
-        startTimeRef.current = Date.now();
-        setPoints([{ lat, lng, timestamp: Date.now()/1000 }]);
-        
-        timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000);
+        setShareModalVisible(true);
 
-        locationSubscription.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
-          async (loc) => {
-            const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
-            setCurrentPoint(newPoint);
-            setPoints(prev => [...prev, newPoint]);
-            fetchAddress(newPoint.lat, newPoint.lng);
-            await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
-            await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
-          }
-        );
+        if (shareType === 'live') {
+            setCurrentExpiresAt(expiresAt);
+            setIsTracking(true);
+            startTimeRef.current = Date.now();
+            setPoints([{ lat, lng, timestamp: Date.now()/1000 }]);
+            
+            timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000);
+
+            locationSubscription.current = await Location.watchPositionAsync(
+              { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+              async (loc) => {
+                const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
+                setCurrentPoint(newPoint);
+                setPoints(prev => [...prev, newPoint]);
+                await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
+                await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
+              }
+            );
+        }
     } catch (globalErr) { setIsStarting(false); Alert.alert('Error', 'Unexpected error.'); }
   };
 
@@ -374,26 +374,25 @@ export default function HomeScreen() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
+  const shareJourney = async () => {
+    if (!trackId) return;
+    const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
+    await Clipboard.setStringAsync(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
+  };
+
   const confirmShare = async () => {
       if (!trackId) return;
       await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
-      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
-      await Clipboard.setStringAsync(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
       setShareModalVisible(false);
       setShareSuccessVisible(true);
-      if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
+      fetchPastJourneys();
   };
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
-      <Head>
-        <title>FindMyFam - Family Safety & Locator</title>
-        <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
-        <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
-        <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
-      </Head>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100, alignItems: 'center' }}>
         <View style={{ width: '100%', maxWidth: 800 }}>
             {/* Header */}
@@ -487,21 +486,17 @@ export default function HomeScreen() {
                                     {user?.imageUrl ? <Image source={{ uri: user.imageUrl }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
                                     <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
                                 </View>
-                                                                <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
-                                                            </View>
-                                
-                                                            {/* Nickname Input */}
-                                                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Your Name / Nickname</Text>
-                                                                 <TextInput value={userNickname} onChangeText={setUserNickname} placeholder="e.g. 'Mom', 'Billy'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />
-                                                            </View>
-                                
-                                                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                
+                                <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
+                            </View>
+                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Your Name / Nickname</Text>
+                                 <TextInput value={userNickname} onChangeText={setUserNickname} placeholder="e.g. 'Mom', 'Billy'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />
+                            </View>
+                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
                                 <View className="flex-row gap-2">
                                     {(['live', 'current', 'address'] as const).map((type) => (
-                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
                                             <Text className={cn("text-[10px] font-bold uppercase", shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300")}>{type}</Text>
                                         </TouchableOpacity>
                                     ))}
@@ -512,7 +507,7 @@ export default function HomeScreen() {
                                      <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
                                      <View className="flex-row gap-2 mb-2">
                                         {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
-                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
                                                 <Text className={cn("text-xs font-bold", durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300")}>{opt}</Text>
                                             </TouchableOpacity>
                                         ))}
@@ -707,4 +702,3 @@ export default function HomeScreen() {
           </View>
         );
       }
-      
