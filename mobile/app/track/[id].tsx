@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity, Linking } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter, Head } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
@@ -10,7 +10,7 @@ import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import { useColorScheme } from 'nativewind';
 import { Notifications } from '@/lib/notifications';
-import { getDistanceFromLatLonInM } from '@/lib/utils';
+import { getDistanceFromLatLonInM, cn } from '@/lib/utils';
 import { Ionicons } from '@expo/vector-icons';
 
 type AccessStatus = 'checking' | 'allowed' | 'denied_privacy' | 'needs_password';
@@ -63,7 +63,7 @@ export default function SharedTrackScreen() {
   const onSignInPress = async () => {
     try {
       const { createdSessionId, setActive } = await startOAuthFlow({
-        redirectUrl: Platform.OS === 'web' ? window.location.href : 'gps-demo://track/' + id,
+        redirectUrl: Platform.OS === 'web' ? window.location.href : 'findmyfam://track/' + id,
       });
       if (createdSessionId && setActive) await setActive({ session: createdSessionId });
     } catch (err) { console.error(err); }
