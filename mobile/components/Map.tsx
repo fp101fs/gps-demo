@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { View, Image, Text } from 'react-native';
+import { View, Image, Text, TouchableOpacity } from 'react-native';
 import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface Point {
   lat: number;
@@ -39,7 +40,25 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       return `${minutes}m ago`;
   };
 
+  const recenter = () => {
+      if (!mapRef.current) return;
+      if (currentPoint) {
+          mapRef.current.animateToRegion({
+              latitude: currentPoint.lat,
+              longitude: currentPoint.lng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+          }, 1000);
+      } else if (fleetMembers.length > 0) {
+          mapRef.current.fitToCoordinates(
+              fleetMembers.map(m => ({ latitude: m.lat, longitude: m.lng })),
+              { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: true }
+          );
+      }
+  };
+
   useEffect(() => {
+    // Initial Fit
     if (!currentPoint && fleetMembers.length > 0 && mapRef.current) {
          mapRef.current.fitToCoordinates(
              fleetMembers.map(m => ({ latitude: m.lat, longitude: m.lng })),
@@ -58,7 +77,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   }, [currentPoint, isReplayMode, fleetMembers]);
 
   return (
-    <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200">
+    <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 relative">
       <MapView
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
@@ -154,6 +173,14 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
             </Marker>
         )}
       </MapView>
+
+      <TouchableOpacity 
+        onPress={recenter}
+        activeOpacity={0.7}
+        className="absolute bottom-4 right-4 bg-white dark:bg-gray-900 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700"
+      >
+        <Ionicons name="locate" size={24} color="#2563eb" />
+      </TouchableOpacity>
     </View>
   );
 }

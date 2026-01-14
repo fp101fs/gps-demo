@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, TouchableOpacity } from 'react-native';
 import { Asset } from 'expo-asset';
+import { Ionicons } from '@expo/vector-icons';
 
 // Standard import for Leaflet (will only be used if OS is web)
 let L: any;
@@ -149,6 +150,18 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
     };
   }, []);
 
+  const recenter = () => {
+      if (!mapRef.current || !L) return;
+      
+      if (currentPoint) {
+          mapRef.current.setView([currentPoint.lat, currentPoint.lng], 15);
+      } else if (fleetMembers.length > 0) {
+          const latLngs = fleetMembers.map(m => [m.lat, m.lng] as [number, number]);
+          const bounds = L.latLngBounds(latLngs);
+          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+  };
+
   // Handle Theme Changes
   useEffect(() => {
       if (!mapRef.current || !tileLayerRef.current) return;
@@ -211,11 +224,11 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         }
     });
 
-    if (!currentPoint && latLngs.length > 0) {
+    if (!currentPoint && latLngs.length > 0 && !isReady) {
         const bounds = L.latLngBounds(latLngs);
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [fleetMembers, currentPoint]);
+  }, [fleetMembers, currentPoint, isReady]);
 
   useEffect(() => {
     if (!mapRef.current || !currentPoint || !L) return;
@@ -226,10 +239,10 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
       markerRef.current.setIcon(icon);
     }
-    if (!isReplayMode) {
+    if (!isReplayMode && !isReady) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
     }
-  }, [currentPoint, isReplayMode, avatarUrl, nickname, isSos]);
+  }, [currentPoint, isReplayMode, avatarUrl, nickname, isSos, isReady]);
 
   useEffect(() => {
     if (!mapRef.current || !L) return;
@@ -243,9 +256,19 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   }, [points]);
 
   return (
-    <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+    <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative">
       {Platform.OS === 'web' ? (
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        <>
+            <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+            {isReady && (
+                <TouchableOpacity 
+                    onPress={recenter}
+                    className="absolute bottom-4 right-4 z-[1000] bg-white dark:bg-gray-900 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700"
+                >
+                    <Ionicons name="locate" size={24} color="#2563eb" />
+                </TouchableOpacity>
+            )}
+        </>
       ) : (
         <View className="flex-1 items-center justify-center">
             <Text>Map not available on this platform</Text>
