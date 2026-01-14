@@ -225,7 +225,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         }
     });
 
-    if (!currentPoint && latLngs.length > 0 && !isReady) {
+    if (!currentPoint && latLngs.length > 0 && isReady) {
         const bounds = L.latLngBounds(latLngs);
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
@@ -240,10 +240,10 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
       if (icon) markerRef.current.setIcon(icon);
     }
-    if (!isReplayMode && !isReady) {
+    if (!isReplayMode) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
     }
-  }, [currentPoint, isReplayMode, avatarUrl, nickname, isSos, isReady]);
+  }, [currentPoint, isReplayMode, avatarUrl, nickname, isSos]);
 
   useEffect(() => {
     if (!mapRef.current || !L) return;

@@ -5,7 +5,7 @@ import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
-import { useRouter, Head } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Notifications } from '@/lib/notifications';
 import { cn, getDistanceFromLatLonInM } from '@/lib/utils';
@@ -327,7 +327,7 @@ export default function HomeScreen() {
             } catch (e) {}
         }
 
-        const { data: track, error } = await supabase.from('tracks').insert([{ 
+        const { data: track, error = null } = await supabase.from('tracks').insert([{ 
             is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
@@ -388,26 +388,19 @@ export default function HomeScreen() {
 
   const confirmShare = async () => {
       if (!trackId) return;
-      await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
-      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
-      await Clipboard.setStringAsync(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await supabase.from('tracks').update({ 
+          privacy_mode: tempPrivacyMode, 
+          allowed_emails: tempAllowedEmails, 
+          password: passwordEnabled ? (tempPassword || null) : null 
+      }).eq('id', trackId);
+      
       setShareModalVisible(false);
       setShareSuccessVisible(true);
-      if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
+      fetchPastJourneys();
   };
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
-      {Platform.OS === 'web' && (
-        <Head>
-            <title>FindMyFam - Family Safety & Locator</title>
-            <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
-            <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
-            <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
-        </Head>
-      )}
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100, alignItems: 'center' }}>
         <View style={{ width: '100%', maxWidth: 800 }}>
             {/* Header */}
@@ -511,7 +504,7 @@ export default function HomeScreen() {
                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
                                 <View className="flex-row gap-2">
                                     {(['live', 'current', 'address'] as const).map((type) => (
-                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                        <TouchableOpacity key={type} onPress={() => setShareType(type)} className={cn("flex-1 py-2 rounded-md border items-center", shareType === type ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
                                             <Text className={cn("text-[10px] font-bold uppercase", shareType === type ? "text-white" : "text-gray-600 dark:text-gray-300")}>{type}</Text>
                                         </TouchableOpacity>
                                     ))}
@@ -522,7 +515,7 @@ export default function HomeScreen() {
                                      <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Sharing Duration</Text>
                                      <View className="flex-row gap-2 mb-2">
                                         {(['20m', '2h', '10h', 'Custom'] as const).map((opt) => (
-                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600")}>
+                                            <TouchableOpacity key={opt} onPress={() => setDurationOption(opt)} className={cn("flex-1 py-2 rounded-md border items-center", durationOption === opt ? "bg-blue-600 border-blue-600" : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-200")}>
                                                 <Text className={cn("text-xs font-bold", durationOption === opt ? "text-white" : "text-gray-600 dark:text-gray-300")}>{opt}</Text>
                                             </TouchableOpacity>
                                         ))}
@@ -717,3 +710,4 @@ export default function HomeScreen() {
           </View>
         );
       }
+      
