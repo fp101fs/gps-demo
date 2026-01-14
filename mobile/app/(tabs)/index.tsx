@@ -327,7 +327,7 @@ export default function HomeScreen() {
             } catch (e) {}
         }
 
-        const { data: track, error = null } = await supabase.from('tracks').insert([{ 
+        const { data: track, error } = await supabase.from('tracks').insert([{ 
             is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
@@ -388,15 +388,14 @@ export default function HomeScreen() {
 
   const confirmShare = async () => {
       if (!trackId) return;
-      await supabase.from('tracks').update({ 
-          privacy_mode: tempPrivacyMode, 
-          allowed_emails: tempAllowedEmails, 
-          password: passwordEnabled ? (tempPassword || null) : null 
-      }).eq('id', trackId);
-      
+      await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
+      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
+      await Clipboard.setStringAsync(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
       setShareModalVisible(false);
       setShareSuccessVisible(true);
-      fetchPastJourneys();
+      if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
   };
 
   return (
@@ -424,7 +423,7 @@ export default function HomeScreen() {
                 <TouchableOpacity onPress={() => router.push('/notifications')} className="mr-2 relative">
                     <Ionicons name="notifications-outline" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} />
                     {unreadCount > 0 && (
-                        <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full justify-center items-center z-10"><Text className="text-white text-[10px] font-bold">{unreadCount}</Text></View>
+                        <View className="absolute -top-1 -right-1 bg-red-500 world-4 h-4 rounded-full justify-center items-center z-10"><Text className="text-white text-[10px] font-bold">{unreadCount}</Text></View>
                     )}
                 </TouchableOpacity>
                 {isTracking && (
@@ -710,4 +709,3 @@ export default function HomeScreen() {
           </View>
         );
       }
-      
