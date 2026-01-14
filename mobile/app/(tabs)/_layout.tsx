@@ -1,7 +1,7 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Pressable, View, Text, Image } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -29,8 +29,23 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          title: 'Home',
+          headerTitle: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Image 
+                source={require('../../assets/images/favicon.png')} 
+                style={{ width: 24, height: 24, marginRight: 8, borderRadius: 4 }} 
+              />
+              <Text style={{ 
+                fontSize: 18, 
+                fontWeight: 'bold', 
+                color: colorScheme === 'dark' ? 'white' : 'black' 
+              }}>
+                FindMyFam
+              </Text>
+            </View>
+          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="map-marker" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
               <Pressable>
@@ -51,7 +66,7 @@ export default function TabLayout() {
         name="fleet"
         options={{
           title: 'Family',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
         }}
       />
       <Tabs.Screen
