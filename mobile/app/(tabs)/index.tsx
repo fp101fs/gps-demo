@@ -5,7 +5,7 @@ import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
+import { useRouter, Head } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Notifications } from '@/lib/notifications';
 import { cn, getDistanceFromLatLonInM } from '@/lib/utils';
@@ -388,6 +388,12 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
+      <Head>
+        <title>FindMyFam - Family Safety & Locator</title>
+        <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
+        <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
+        <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
+      </Head>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100, alignItems: 'center' }}>
         <View style={{ width: '100%', maxWidth: 800 }}>
             {/* Header */}

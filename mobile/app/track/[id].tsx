@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, Platform, Switch, TextInput, useWindowDimensions, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter, Head } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Map from '@/components/Map';
 import type { Point } from '@/components/Map';
@@ -279,6 +279,13 @@ export default function SharedTrackScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black items-center">
+      <Head>
+        <title>FindMyFam - Live Location</title>
+        <meta property="og:title" content="Follow my live journey on FindMyFam" />
+        <meta property="og:description" content="Real-time family safety and location tracking." />
+        <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+      </Head>
       <Stack.Screen options={{ 
           title: shareType === 'live' ? (isActive ? '🔴 Live Journey' : 'Past Journey') : 
                  shareType === 'current' ? '📍 Pinned Location' : '🏠 Shared Address' 
