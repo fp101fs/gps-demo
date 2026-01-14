@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Alert, Platform, Share, Switch, Image, TextInput, TouchableOpacity, Modal, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { Notifications } from '@/lib/notifications';
 import { cn, getDistanceFromLatLonInM } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -33,8 +33,7 @@ interface Journey {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useUser();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { colorScheme } = useColorScheme();
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024;
@@ -328,7 +327,7 @@ export default function HomeScreen() {
         }
 
         const { data: track, error } = await supabase.from('tracks').insert([{ 
-            is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
+            is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.user_metadata.avatar_url : null, 
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
             expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
@@ -388,14 +387,15 @@ export default function HomeScreen() {
 
   const confirmShare = async () => {
       if (!trackId) return;
-      await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
-      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
-      await Clipboard.setStringAsync(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await supabase.from('tracks').update({ 
+          privacy_mode: tempPrivacyMode, 
+          allowed_emails: tempAllowedEmails, 
+          password: passwordEnabled ? (tempPassword || null) : null 
+      }).eq('id', trackId);
+      
       setShareModalVisible(false);
       setShareSuccessVisible(true);
-      if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
+      fetchPastJourneys();
   };
 
   return (
@@ -423,7 +423,7 @@ export default function HomeScreen() {
                 <TouchableOpacity onPress={() => router.push('/notifications')} className="mr-2 relative">
                     <Ionicons name="notifications-outline" size={24} color={colorScheme === 'dark' ? 'white' : 'black'} />
                     {unreadCount > 0 && (
-                        <View className="absolute -top-1 -right-1 bg-red-500 world-4 h-4 rounded-full justify-center items-center z-10"><Text className="text-white text-[10px] font-bold">{unreadCount}</Text></View>
+                        <View className="absolute -top-1 -right-1 bg-red-500 w-4 h-4 rounded-full justify-center items-center z-10"><Text className="text-white text-[10px] font-bold">{unreadCount}</Text></View>
                     )}
                 </TouchableOpacity>
                 {isTracking && (
@@ -464,7 +464,7 @@ export default function HomeScreen() {
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View style={{ height: isLargeScreen ? 450 : 256 }} className="bg-gray-100 dark:bg-gray-800">
-                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.imageUrl : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} />
+                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">
@@ -490,7 +490,7 @@ export default function HomeScreen() {
                         <View className="gap-4">
                             <View className="flex-row items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                 <View className="flex-row items-center gap-3">
-                                    {user?.imageUrl ? <Image source={{ uri: user.imageUrl }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
+                                    {user?.user_metadata?.avatar_url ? <Image source={{ uri: user.user_metadata.avatar_url }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
                                     <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
                                 </View>
                                 <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
@@ -618,8 +618,8 @@ export default function HomeScreen() {
                     <Text className="text-gray-900 dark:text-white font-medium mb-1" numberOfLines={2}>{shareType === 'address' ? address : `GPS: ${currentPoint?.lat.toFixed(6)}, ${currentPoint?.lng.toFixed(6)}`}</Text>
                     <Text className="text-gray-500 dark:text-gray-400 text-[10px]">{shareType === 'live' ? 'Updating in real-time' : 'Fixed point shared'}</Text>
                 </View>
-                <View className="items-center mb-6"><View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'} size={160} color="black" backgroundColor="white" /></View><Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text></View>
-                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'}</Text><TouchableOpacity onPress={() => confirmShare()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
+                <View className="items-center mb-6"><View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><QRCode value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`} size={160} color="black" backgroundColor="white" /></View><Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text></View>
+                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}</Text><TouchableOpacity onPress={() => confirmShare()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
             </View>
         </View>
       </Modal>
@@ -629,7 +629,7 @@ export default function HomeScreen() {
             <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
                 <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Scan to Follow</Text>
                 <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">Show this code to anyone you want to share your live journey with.</Text>
-                <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://findmyfam.vercel.app'} size={200} color="black" backgroundColor="white" /></View>
+                <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={trackId ? `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}` : 'https://gps-demo.vercel.app'} size={200} color="black" backgroundColor="white" /></View>
                 <Button onPress={() => setShowQR(false)} className="w-full"><Text className="text-white font-bold">Done</Text></Button>
             </View>
         </View>
@@ -709,3 +709,4 @@ export default function HomeScreen() {
           </View>
         );
       }
+      
