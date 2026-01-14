@@ -28,13 +28,14 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
+  nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -44,18 +45,40 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
 
-  // Helper to create the correct icon
-  const createIcon = (url?: string, memberIsSos?: boolean) => {
+  // Helper to create the correct icon with nickname label
+  const createIcon = (url?: string, label?: string, memberIsSos?: boolean) => {
     const size = memberIsSos ? 80 : 40;
     const radius = size / 2;
     const border = memberIsSos ? '4px solid #ef4444' : '2px solid white';
     const shadow = memberIsSos ? '0 0 20px #ef4444' : '0 2px 5px rgba(0,0,0,0.3)';
     const animationClass = memberIsSos ? 'marker-pulse-sos' : 'marker-pulse';
+    
+    const labelHtml = label ? `
+      <div style="
+        position: absolute; 
+        top: -25px; 
+        left: 50%; 
+        transform: translateX(-50%); 
+        background-color: ${memberIsSos ? '#ef4444' : 'rgba(0,0,0,0.7)'}; 
+        color: white; 
+        padding: 2px 8px; 
+        border-radius: 10px; 
+        font-size: 10px; 
+        font-weight: bold; 
+        white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      ">
+        ${label}
+      </div>
+    ` : '';
 
-    if (url) {
-      return L.divIcon({
-        className: animationClass,
-        html: `
+    const imgHtml = url ? `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<img src="${Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri}" style="width: 100%; height: 100%; object-fit: contain; padding: 5px;" />`;
+
+    return L.divIcon({
+      className: animationClass,
+      html: `
+        <div style="position: relative; width: ${size}px; height: ${size}px;">
+          ${labelHtml}
           <div style="
             width: ${size}px; 
             height: ${size}px; 
@@ -65,20 +88,12 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
             overflow: hidden;
             background-color: white;
           ">
-            <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" />
+            ${imgHtml}
           </div>
-        `,
-        iconSize: [size, size],
-        iconAnchor: [radius, radius],
-      });
-    }
-
-    return L.icon({
-      iconUrl: Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri,
+        </div>
+      `,
       iconSize: [size, size],
       iconAnchor: [radius, radius],
-      popupAnchor: [0, -radius],
-      className: animationClass
     });
   };
 
@@ -132,7 +147,6 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
   useEffect(() => {
     if (!mapRef.current || !L) return;
 
-    // Remove old zones
     Object.keys(zoneLayersRef.current).forEach(id => {
         if (!safeZones.find(z => z.id === id)) {
             mapRef.current.removeLayer(zoneLayersRef.current[id]);
@@ -140,7 +154,6 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
         }
     });
 
-    // Add/Update zones
     safeZones.forEach(zone => {
         if (zoneLayersRef.current[zone.id]) {
             zoneLayersRef.current[zone.id].setLatLng([zone.lat, zone.lng]);
@@ -173,7 +186,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
     const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
         latLngs.push([member.lat, member.lng]);
-        const icon = createIcon(member.avatarUrl, member.isSos);
+        const icon = createIcon(member.avatarUrl, member.nickname, member.isSos);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
             fleetMarkersRef.current[member.id].setIcon(icon);
@@ -191,7 +204,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
 
   useEffect(() => {
     if (!mapRef.current || !currentPoint || !L) return;
-    const icon = createIcon(avatarUrl, isSos);
+    const icon = createIcon(avatarUrl, nickname, isSos);
     if (!markerRef.current) {
       markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
     } else {
@@ -201,7 +214,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
     if (!isReplayMode) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
     }
-  }, [currentPoint, isReplayMode, avatarUrl, isSos]);
+  }, [currentPoint, isReplayMode, avatarUrl, nickname, isSos]);
 
   useEffect(() => {
     if (!mapRef.current || !L) return;

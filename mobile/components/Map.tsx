@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { View, Image } from 'react-native';
+import { View, Image, Text } from 'react-native';
 import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export interface Point {
@@ -21,17 +21,17 @@ interface MapProps {
   points: Point[];
   isReplayMode?: boolean;
   avatarUrl?: string;
+  nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], safeZones = [] }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [] }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
-    // If we have fleet members but no current point, fit to fleet
     if (!currentPoint && fleetMembers.length > 0 && mapRef.current) {
          mapRef.current.fitToCoordinates(
              fleetMembers.map(m => ({ latitude: m.lat, longitude: m.lng })),
@@ -85,62 +85,60 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
             <Marker
                 key={member.id}
                 coordinate={{ latitude: member.lat, longitude: member.lng }}
-                title="Fleet Member"
+                title={member.nickname || 'Family Member'}
             >
-                {member.avatarUrl ? (
-                    <View style={{ 
-                        width: member.isSos ? 60 : 40, 
-                        height: member.isSos ? 60 : 40, 
-                        borderRadius: member.isSos ? 30 : 20, 
-                        borderWidth: member.isSos ? 4 : 2, 
-                        borderColor: member.isSos ? '#ef4444' : 'white', 
-                        overflow: 'hidden',
-                        backgroundColor: 'white',
-                        elevation: member.isSos ? 10 : 0
-                    }}>
-                        <Image 
-                            source={{ uri: member.avatarUrl }} 
-                            style={{ width: '100%', height: '100%' }} 
-                        />
-                    </View>
-                ) : (
-                    <Image 
-                        source={require('../assets/images/marker-green-cross.png')} 
-                        style={{ width: member.isSos ? 60 : 40, height: member.isSos ? 60 : 40 }} 
-                        resizeMode="contain"
-                    />
-                )}
+                <View style={{ alignItems: 'center' }}>
+                    {member.nickname && (
+                        <View style={{ backgroundColor: member.isSos ? '#ef4444' : 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginBottom: 2 }}>
+                            <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{member.nickname}</Text>
+                        </View>
+                    )}
+                    {member.avatarUrl ? (
+                        <View style={{ 
+                            width: member.isSos ? 60 : 40, 
+                            height: member.isSos ? 60 : 40, 
+                            borderRadius: member.isSos ? 30 : 20, 
+                            borderWidth: member.isSos ? 4 : 2, 
+                            borderColor: member.isSos ? '#ef4444' : 'white', 
+                            overflow: 'hidden',
+                            backgroundColor: 'white'
+                        }}>
+                            <Image source={{ uri: member.avatarUrl }} style={{ width: '100%', height: '100%' }} />
+                        </View>
+                    ) : (
+                        <Image source={require('../assets/images/marker-green-cross.png')} style={{ width: member.isSos ? 60 : 40, height: member.isSos ? 60 : 40 }} resizeMode="contain" />
+                    )}
+                </View>
             </Marker>
         ))}
         
         {currentPoint && (
             <Marker 
                 coordinate={{ latitude: currentPoint.lat, longitude: currentPoint.lng }}
-                title="Current Location"
+                title={nickname || 'Me'}
             >
-                {avatarUrl ? (
-                    <View style={{ 
-                        width: isSos ? 60 : 40, 
-                        height: isSos ? 60 : 40, 
-                        borderRadius: isSos ? 30 : 20, 
-                        borderWidth: isSos ? 4 : 2, 
-                        borderColor: isSos ? '#ef4444' : 'white', 
-                        overflow: 'hidden',
-                        backgroundColor: 'white',
-                        elevation: isSos ? 10 : 0
-                    }}>
-                        <Image 
-                            source={{ uri: avatarUrl }} 
-                            style={{ width: '100%', height: '100%' }} 
-                        />
-                    </View>
-                ) : (
-                    <Image 
-                        source={require('../assets/images/marker-green-cross.png')} 
-                        style={{ width: isSos ? 60 : 40, height: isSos ? 60 : 40 }} 
-                        resizeMode="contain"
-                    />
-                )}
+                <View style={{ alignItems: 'center' }}>
+                    {nickname && (
+                        <View style={{ backgroundColor: isSos ? '#ef4444' : 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginBottom: 2 }}>
+                            <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{nickname}</Text>
+                        </View>
+                    )}
+                    {avatarUrl ? (
+                        <View style={{ 
+                            width: isSos ? 60 : 40, 
+                            height: isSos ? 60 : 40, 
+                            borderRadius: isSos ? 30 : 20, 
+                            borderWidth: isSos ? 4 : 2, 
+                            borderColor: isSos ? '#ef4444' : 'white', 
+                            overflow: 'hidden',
+                            backgroundColor: 'white'
+                        }}>
+                            <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />
+                        </View>
+                    ) : (
+                        <Image source={require('../assets/images/marker-green-cross.png')} style={{ width: isSos ? 60 : 40, height: isSos ? 60 : 40 }} resizeMode="contain" />
+                    )}
+                </View>
             </Marker>
         )}
       </MapView>

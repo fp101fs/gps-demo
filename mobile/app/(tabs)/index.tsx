@@ -56,6 +56,7 @@ export default function HomeScreen() {
   const [showQR, setShowQR] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isSos, setIsSos] = useState(false);
+  const [userNickname, setUserNickname] = useState('');
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -292,7 +293,7 @@ export default function HomeScreen() {
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
             expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
-            share_type: shareType, lat: lat, lng: lng
+            share_type: shareType, lat: lat, lng: lng, nickname: userNickname || null
         }]).select().single();
 
         if (error) { setIsStarting(false); return Alert.alert('Error', 'Could not create session.'); }
@@ -431,9 +432,17 @@ export default function HomeScreen() {
                                     {user?.imageUrl ? <Image source={{ uri: user.imageUrl }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
                                     <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
                                 </View>
-                                <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
-                            </View>
-                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                                                <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
+                                                            </View>
+                                
+                                                            {/* Nickname Input */}
+                                                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Your Name / Nickname</Text>
+                                                                 <TextInput value={userNickname} onChangeText={setUserNickname} placeholder="e.g. 'Mom', 'Billy'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />
+                                                            </View>
+                                
+                                                            <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                
                                 <Text className="text-xs font-semibold uppercase text-gray-500 mb-2">Share Type</Text>
                                 <View className="flex-row gap-2">
                                     {(['live', 'current', 'address'] as const).map((type) => (
