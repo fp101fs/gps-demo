@@ -59,6 +59,7 @@ export default function HomeScreen() {
   const [userNickname, setUserNickname] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -99,6 +100,12 @@ export default function HomeScreen() {
       fetchUnreadCount();
       fetchSafeZones();
       
+      const checkPerms = async () => {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          setLocationPermission(status);
+      };
+      checkPerms();
+      
       const checkFirstTime = async () => {
           const hasSeen = await SecureStore.getItemAsync('has_seen_onboarding');
           if (!hasSeen) setShowOnboarding(true);
@@ -118,6 +125,14 @@ export default function HomeScreen() {
       if (!user) return;
       const { data } = await supabase.from('safe_zones').select('*').eq('user_id', user.id);
       if (data) setSafeZones(data);
+  };
+
+  const requestPermission = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status);
+      if (status !== 'granted') {
+          Alert.alert('Permission Required', 'FindMyFam needs location access to work correctly.');
+      }
   };
 
   const addSafeZone = async () => {
@@ -268,9 +283,14 @@ export default function HomeScreen() {
   const startTracking = async () => {
     if (isStarting) return;
     setIsStarting(true);
-    try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') { setIsStarting(false); return Alert.alert('Permission denied', 'Allow location access.'); }
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            setLocationPermission(status);
+            if (status !== 'granted') {
+                setIsStarting(false);
+                return Alert.alert('Permission denied', 'Allow location access.');
+            }
+    
         if (!user) { setIsStarting(false); return; }
 
         let mins = 20;
@@ -407,6 +427,27 @@ export default function HomeScreen() {
                 {user && <Button variant="ghost" size="sm" onPress={() => signOut()}><Text className="text-blue-600 dark:text-blue-400">Sign Out</Text></Button>}
               </View>
             </View>
+
+            {/* Permissions Pre-Check Card */}
+            {locationPermission !== 'granted' && !isTracking && (
+                <Card className="mb-6 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                    <CardContent className="pt-6">
+                        <View className="flex-row gap-4 items-center mb-4">
+                            <View className="bg-blue-100 dark:bg-blue-800 p-3 rounded-full">
+                                <Ionicons name="location" size={24} color="#2563eb" />
+                            </View>
+                            <View className="flex-1">
+                                <Text className="text-lg font-bold text-gray-900 dark:text-white">GPS Access Needed</Text>
+                                <Text className="text-sm text-gray-600 dark:text-gray-400">To keep your family circle safe, FindMyFam needs to see your location.</Text>
+                            </View>
+                        </View>
+                        <Button onPress={requestPermission} variant="default" className="w-full h-12">
+                            <Text className="text-white font-bold">Enable Location Services</Text>
+                        </Button>
+                        <Text className="text-[10px] text-gray-400 text-center mt-3">We only track you when a journey is active.</Text>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
