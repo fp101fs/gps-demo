@@ -5,74 +5,71 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { ClerkProvider, SignedIn, SignedOut, useOAuth, useAuth } from '@clerk/clerk-expo';
-import { Text, View, SafeAreaView } from 'react-native';
+import { Text, View, SafeAreaView, Image } from 'react-native';
 import { Button } from '@/components/ui/Button'; 
-import * as SecureStore from 'expo-secure-store';
 import { useColorScheme } from 'nativewind';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import '../global.css';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-const tokenCache = {
-  async getToken(key: string) {
-    try {
-      return SecureStore.getItemAsync(key);
-    } catch (err) {
-      return null;
-    }
-  },
-  async saveToken(key: string, value: string) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      return;
-    }
-  },
-};
-
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-
-if (!publishableKey) {
-  throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env');
-}
-
 WebBrowser.maybeCompleteAuthSession();
 
 function SignInScreen() {
-    const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
-
-    const onPress = async () => {
+    const handleGoogleSignIn = async () => {
       try {
-        const { createdSessionId, setActive } = await startOAuthFlow({
-          redirectUrl: Linking.createURL('/', { scheme: 'gps-demo' }),
+        const redirectTo = Linking.createURL('/');
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+            redirectTo,
+          },
         });
 
-        if (createdSessionId && setActive) {
-          setActive({ session: createdSessionId });
+        if (error) throw error;
+        if (data.url) {
+          await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
         }
       } catch (err) {
-        console.error("OAuth error", err);
+        console.error("Auth error", err);
       }
     };
 
     return (
-        <SafeAreaView className="flex-1 items-center justify-center bg-white p-4">
-             <Text className="text-2xl font-bold mb-4">Welcome to GPS Demo</Text>
-             <Text className="text-gray-500 mb-8 text-center">Please sign in to track your location securely.</Text>
-             <Button onPress={onPress} className="w-full">
-                <Text className="text-white font-bold">Sign in with Google</Text>
+        <SafeAreaView className="flex-1 items-center justify-center bg-white dark:bg-black p-6">
+             <View className="items-center mb-12">
+                <View className="bg-blue-100 dark:bg-blue-900/30 p-6 rounded-3xl mb-6">
+                    <Image 
+                        source={require('../assets/images/favicon.png')} 
+                        style={{ width: 80, height: 80, borderRadius: 16 }} 
+                    />
+                </View>
+                <Text className="text-4xl font-black text-gray-900 dark:text-white mb-2">FindMyFam</Text>
+                <Text className="text-gray-500 dark:text-gray-400 text-center text-lg">Keep your family circle safe and connected.</Text>
+             </View>
+
+             <Button onPress={handleGoogleSignIn} className="w-full h-16 rounded-2xl flex-row items-center justify-center gap-3">
+                <Text className="text-white font-bold text-xl">Sign in with Google</Text>
              </Button>
+             
+             <Text className="mt-8 text-gray-400 text-sm text-center">
+                Secure tracking for the people who matter most.
+             </Text>
         </SafeAreaView>
     )
 }
 
 function InitialLayout() {
   const { colorScheme } = useColorScheme();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -81,25 +78,20 @@ function InitialLayout() {
   });
 
   useEffect(() => {
-    if (loaded) {
+    if (loaded && !loading) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, loading]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    const inAuthGroup = segments[0] === '(tabs)';
-    const isPublicRoute = segments[0] === 'track';
-
-    if (!isSignedIn && !isPublicRoute && inAuthGroup) {
-      // If the user is not signed in and the initial segment is not a public route, redirect to sign-in
-      // (This is handled by SignedIn/SignedOut wrappers below, but segments check is good for deep linking)
-    }
-  }, [isSignedIn, segments, isLoaded]);
-
-  if (!loaded || !isLoaded) {
+  if (!loaded || loading) {
     return null;
+  }
+
+  const isSignedIn = !!user;
+  const isPublicRoute = segments[0] === 'track';
+
+  if (!isSignedIn && !isPublicRoute && segments[0] === '(tabs)') {
+      return <SignInScreen />;
   }
 
   return (
@@ -109,18 +101,6 @@ function InitialLayout() {
         <Stack.Screen name="track/[id]" options={{ title: 'Shared Journey' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
-      
-      {/* Auth Gate for Tab routes */}
-      {segments[0] === '(tabs)' && (
-        <>
-          <SignedOut>
-            <View className="absolute inset-0 bg-white">
-               <SignInScreen />
-            </View>
-          </SignedOut>
-        </>
-      )}
-
       <StatusBar style="auto" />
     </ThemeProvider>
   );
@@ -128,8 +108,8 @@ function InitialLayout() {
 
 export default function RootLayout() {
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+    <AuthProvider>
       <InitialLayout />
-    </ClerkProvider>
+    </AuthProvider>
   );
 }
