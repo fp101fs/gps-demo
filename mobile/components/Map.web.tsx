@@ -3,9 +3,9 @@ import { View, Text, Platform, TouchableOpacity } from 'react-native';
 import { Asset } from 'expo-asset';
 import { Ionicons } from '@expo/vector-icons';
 
-// Standard import for Leaflet (will only be used if OS is web)
+// Standard import for Leaflet (will only be used if OS is web and window is defined)
 let L: any;
-if (Platform.OS === 'web') {
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
   L = require('leaflet');
   require('leaflet/dist/leaflet.css');
 }
@@ -59,6 +59,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
 
   // Helper to create the correct icon with nickname label and last seen
   const createIcon = (url?: string, label?: string, memberIsSos?: boolean, lastSeen?: string) => {
+    if (!L) return null;
     const size = memberIsSos ? 80 : 40;
     const radius = size / 2;
     const border = memberIsSos ? '4px solid #ef4444' : '2px solid white';
@@ -114,7 +115,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   };
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !containerRef.current || mapRef.current) return;
+    if (Platform.OS !== 'web' || !containerRef.current || mapRef.current || !L) return;
 
     let startLat = 0;
     let startLng = 0;
@@ -217,7 +218,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         const icon = createIcon(member.avatarUrl, member.nickname, member.isSos, member.lastSeen);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
-            fleetMarkersRef.current[member.id].setIcon(icon);
+            if (icon) fleetMarkersRef.current[member.id].setIcon(icon);
         } else {
             const marker = L.marker([member.lat, member.lng], { icon }).addTo(mapRef.current);
             fleetMarkersRef.current[member.id] = marker;
@@ -237,7 +238,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
-      markerRef.current.setIcon(icon);
+      if (icon) markerRef.current.setIcon(icon);
     }
     if (!isReplayMode && !isReady) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
@@ -259,7 +260,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative">
       {Platform.OS === 'web' ? (
         <>
-            <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+            {typeof window !== 'undefined' && <div ref={containerRef} style={{ width: '100%', height: '100%' }} />}
             {isReady && (
                 <TouchableOpacity 
                     onPress={recenter}
