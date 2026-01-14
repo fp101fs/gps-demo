@@ -107,7 +107,7 @@ export default function HomeScreen() {
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
           if (count === 0) {
-              await Notifications.send(user.id, 'Welcome to Family Locator!', 'Start a live check-in or manage your Safe Zones below.', 'success');
+              await Notifications.send(user.id, 'Welcome to FindMyFam!', 'Start a live check-in or manage your Safe Zones below.', 'success');
           }
       };
       checkAndWelcome();
