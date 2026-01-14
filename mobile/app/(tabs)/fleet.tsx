@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/Button';
 import Map from '@/components/Map';
 import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
+import { storage } from '@/lib/storage';
 
 interface FleetMember {
   id: string;
@@ -44,7 +44,7 @@ export default function FleetScreen() {
   // 1. Persistence & Auto-join Logic
   useEffect(() => {
     const init = async () => {
-        const saved = await SecureStore.getItemAsync('last_fleet_code');
+        const saved = await storage.getItem('last_fleet_code');
         const initialCode = inviteCode || saved;
         
         if (initialCode) {
@@ -67,7 +67,7 @@ export default function FleetScreen() {
               return;
           }
           setActiveCode(code);
-          await SecureStore.setItemAsync('last_fleet_code', code);
+          await storage.setItem('last_fleet_code', code);
       } catch (e) {}
       setLoading(false);
   };
@@ -76,7 +76,7 @@ export default function FleetScreen() {
       if (enteredPassword === correctPassword) {
           setNeedsPassword(false);
           setActiveCode(fleetCode);
-          await SecureStore.setItemAsync('last_fleet_code', fleetCode);
+          await storage.setItem('last_fleet_code', fleetCode);
           setPasswordError(false);
       } else {
           setPasswordError(true);
@@ -130,7 +130,7 @@ export default function FleetScreen() {
   const handleExit = async () => {
       setActiveCode(null);
       setMembers([]);
-      await SecureStore.deleteItemAsync('last_fleet_code');
+      await storage.removeItem('last_fleet_code');
   };
 
   const shareInvite = async () => {
@@ -138,7 +138,9 @@ export default function FleetScreen() {
       await Clipboard.setStringAsync(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      if (Platform.OS !== 'web') await Share.share({ message: `Join my Family Circle on Family Locator! Click here: ${url}`, url });
+      if (Platform.OS !== 'web') {
+          await Share.share({ message: `Join my Family Circle on FindMyFam! Click here: ${url}`, url });
+      }
   };
 
   if (needsPassword) {
@@ -182,7 +184,9 @@ export default function FleetScreen() {
                         </View>
                         <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
                     </View>
-                    <Button variant="destructive" className="h-full px-4" onPress={handleExit}><Ionicons name="exit-outline" size={20} color="white" /></Button>
+                    <Button variant="destructive" className="h-full px-4" onPress={handleExit}>
+                        <Ionicons name="exit-outline" size={20} color="white" />
+                    </Button>
                  </View>
                  {sosMembers.length > 0 && (
                      <View className="w-full max-w-2xl bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">

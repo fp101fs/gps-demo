@@ -16,7 +16,7 @@ import type { Point, SafeZone } from '@/components/Map';
 import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '@/lib/storage';
 
 interface Journey {
   id: string;
@@ -104,14 +104,25 @@ export default function HomeScreen() {
       const checkPerms = async () => {
           const { status } = await Location.getForegroundPermissionsAsync();
           setLocationPermission(status);
+          if (status === 'granted') {
+              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+              if (loc) setCurrentPoint({ lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 });
+          }
       };
       checkPerms();
       
       const checkFirstTime = async () => {
-          const hasSeen = await SecureStore.getItemAsync('has_seen_onboarding');
+          const hasSeen = await storage.getItem('has_seen_onboarding');
           if (!hasSeen) setShowOnboarding(true);
       };
       checkFirstTime();
+
+      const loadFleet = async () => {
+          const saved = await storage.getItem('last_fleet_code');
+          if (saved) setFleetCode(saved);
+      };
+      loadFleet();
+
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
           if (count === 0) {
@@ -131,7 +142,10 @@ export default function HomeScreen() {
   const requestPermission = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status);
-      if (status !== 'granted') {
+      if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+          if (loc) setCurrentPoint({ lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 });
+      } else {
           Alert.alert('Permission Required', 'FindMyFam needs location access to work correctly.');
       }
   };
@@ -284,14 +298,10 @@ export default function HomeScreen() {
   const startTracking = async () => {
     if (isStarting) return;
     setIsStarting(true);
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            setLocationPermission(status);
-            if (status !== 'granted') {
-                setIsStarting(false);
-                return Alert.alert('Permission denied', 'Allow location access.');
-            }
-    
+    try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        setLocationPermission(status);
+        if (status !== 'granted') { setIsStarting(false); return Alert.alert('Permission denied', 'Allow location access.'); }
         if (!user) { setIsStarting(false); return; }
 
         let mins = 20;
@@ -308,12 +318,14 @@ export default function HomeScreen() {
         const lng = initialLocation.coords.longitude;
         setCurrentPoint({ lat, lng, timestamp: Date.now() / 1000 });
 
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-            const data = await res.json();
-            const addr = data.display_name;
-            if (addr) { setAddress(addr); if (shareType === 'address') finalNote = (shareNote ? shareNote + " - " : "") + addr; }
-        } catch (e) {}
+        if (shareType === 'address' || shareType === 'current') {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                const data = await res.json();
+                const addr = data.display_name;
+                if (addr) { setAddress(addr); if (shareType === 'address') finalNote = (shareNote ? shareNote + " - " : "") + addr; }
+            } catch (e) {}
+        }
 
         const { data: track, error } = await supabase.from('tracks').insert([{ 
             is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.imageUrl : null, 
@@ -374,18 +386,14 @@ export default function HomeScreen() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
-  const shareJourney = async () => {
-    if (!trackId) return;
-    const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`;
-    await Clipboard.setStringAsync(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    if (Platform.OS !== 'web') await Share.share({ message: `Follow my journey: ${url}`, url });
-  };
-
   const confirmShare = async () => {
       if (!trackId) return;
-      await supabase.from('tracks').update({ privacy_mode: tempPrivacyMode, allowed_emails: tempAllowedEmails, password: passwordEnabled ? (tempPassword || null) : null }).eq('id', trackId);
+      await supabase.from('tracks').update({ 
+          privacy_mode: tempPrivacyMode, 
+          allowed_emails: tempAllowedEmails, 
+          password: passwordEnabled ? (tempPassword || null) : null 
+      }).eq('id', trackId);
+      
       setShareModalVisible(false);
       setShareSuccessVisible(true);
       fetchPastJourneys();
@@ -393,6 +401,12 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: insets.top }}>
+      <Head>
+        <title>FindMyFam - Family Safety & Locator</title>
+        <meta property="og:title" content="FindMyFam - Keep Your Circle Safe" />
+        <meta property="og:description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
+        <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
+      </Head>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100, alignItems: 'center' }}>
         <View style={{ width: '100%', maxWidth: 800 }}>
             {/* Header */}
@@ -612,7 +626,7 @@ export default function HomeScreen() {
                     <Text className="text-gray-500 dark:text-gray-400 text-[10px]">{shareType === 'live' ? 'Updating in real-time' : 'Fixed point shared'}</Text>
                 </View>
                 <View className="items-center mb-6"><View className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><QRCode value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`} size={160} color="black" backgroundColor="white" /></View><Text className="text-[10px] text-gray-400 mt-2">Scan to follow instantly</Text></View>
-                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}</Text><TouchableOpacity onPress={() => shareJourney()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
+                <View className="gap-3"><View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center"><Text className="flex-1 text-gray-500 dark:text-gray-400 text-xs" numberOfLines={1}>{`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${trackId}`}</Text><TouchableOpacity onPress={() => confirmShare()} className="ml-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg"><Text className="text-blue-600 dark:text-blue-300 text-[10px] font-bold uppercase">{copied ? 'Copied' : 'Copy'}</Text></TouchableOpacity></View><Button onPress={() => setShareSuccessVisible(false)} className="w-full h-12"><Text className="text-white font-bold">Done</Text></Button></View>
             </View>
         </View>
       </Modal>
@@ -683,7 +697,7 @@ export default function HomeScreen() {
                                 </Button>
                             ) : (
                                 <Button onPress={async () => {
-                                    await SecureStore.setItemAsync('has_seen_onboarding', 'true');
+                                    await storage.setItem('has_seen_onboarding', 'true');
                                     setShowOnboarding(false);
                                 }} className="w-full h-14">
                                     <Text className="text-white font-bold text-lg">Get Started</Text>
@@ -702,3 +716,4 @@ export default function HomeScreen() {
           </View>
         );
       }
+      
