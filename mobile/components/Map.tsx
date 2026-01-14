@@ -23,13 +23,21 @@ interface MapProps {
   avatarUrl?: string;
   nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean }[];
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
 
 export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [] }: MapProps) {
   const mapRef = useRef<MapView>(null);
+
+  const getRelativeTime = (isoString?: string) => {
+      if (!isoString) return '';
+      const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m ago`;
+  };
 
   useEffect(() => {
     if (!currentPoint && fleetMembers.length > 0 && mapRef.current) {
@@ -101,12 +109,16 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                             borderWidth: member.isSos ? 4 : 2, 
                             borderColor: member.isSos ? '#ef4444' : 'white', 
                             overflow: 'hidden',
-                            backgroundColor: 'white'
+                            backgroundColor: 'white',
+                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000)) ? 0.7 : 1
                         }}>
                             <Image source={{ uri: member.avatarUrl }} style={{ width: '100%', height: '100%' }} />
                         </View>
                     ) : (
                         <Image source={require('../assets/images/marker-green-cross.png')} style={{ width: member.isSos ? 60 : 40, height: member.isSos ? 60 : 40 }} resizeMode="contain" />
+                    )}
+                    {member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000) && (
+                        <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 2, fontWeight: 'bold' }}>{getRelativeTime(member.lastSeen)}</Text>
                     )}
                 </View>
             </Marker>

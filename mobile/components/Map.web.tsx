@@ -30,7 +30,7 @@ interface MapProps {
   avatarUrl?: string;
   nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean }[];
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
@@ -45,14 +45,28 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
 
-  // Helper to create the correct icon with nickname label
-  const createIcon = (url?: string, label?: string, memberIsSos?: boolean) => {
+  // Helper to get relative time
+  const getRelativeTime = (isoString?: string) => {
+      if (!isoString) return '';
+      const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h ago`;
+  };
+
+  // Helper to create the correct icon with nickname label and last seen
+  const createIcon = (url?: string, label?: string, memberIsSos?: boolean, lastSeen?: string) => {
     const size = memberIsSos ? 80 : 40;
     const radius = size / 2;
     const border = memberIsSos ? '4px solid #ef4444' : '2px solid white';
     const shadow = memberIsSos ? '0 0 20px #ef4444' : '0 2px 5px rgba(0,0,0,0.3)';
     const animationClass = memberIsSos ? 'marker-pulse-sos' : 'marker-pulse';
     
+    const relativeTime = getRelativeTime(lastSeen);
+    const isStale = lastSeen && (Date.now() - new Date(lastSeen).getTime() > 60000); // More than 1 min
+
     const labelHtml = label ? `
       <div style="
         position: absolute; 
@@ -68,7 +82,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         white-space: nowrap;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       ">
-        ${label}
+        ${label}${isStale ? ` <span style="font-weight: normal; opacity: 0.8; font-size: 8px;">(${relativeTime})</span>` : ''}
       </div>
     ` : '';
 
@@ -87,6 +101,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
             box-shadow: ${shadow};
             overflow: hidden;
             background-color: white;
+            ${isStale ? 'opacity: 0.7;' : ''}
           ">
             ${imgHtml}
           </div>
@@ -186,7 +201,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
     const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
         latLngs.push([member.lat, member.lng]);
-        const icon = createIcon(member.avatarUrl, member.nickname, member.isSos);
+        const icon = createIcon(member.avatarUrl, member.nickname, member.isSos, member.lastSeen);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
             fleetMarkersRef.current[member.id].setIcon(icon);
