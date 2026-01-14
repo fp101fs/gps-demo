@@ -57,6 +57,8 @@ export default function HomeScreen() {
   const [isStarting, setIsStarting] = useState(false);
   const [isSos, setIsSos] = useState(false);
   const [userNickname, setUserNickname] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -96,6 +98,12 @@ export default function HomeScreen() {
       fetchPastJourneys();
       fetchUnreadCount();
       fetchSafeZones();
+      
+      const checkFirstTime = async () => {
+          const hasSeen = await SecureStore.getItemAsync('has_seen_onboarding');
+          if (!hasSeen) setShowOnboarding(true);
+      };
+      checkFirstTime();
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
           if (count === 0) {
@@ -576,7 +584,80 @@ export default function HomeScreen() {
                 <Button onPress={() => setShowQR(false)} className="w-full"><Text className="text-white font-bold">Done</Text></Button>
             </View>
         </View>
-      </Modal>
-    </View>
-  );
-}
+            </Modal>
+      
+            {/* Onboarding Walkthrough */}
+            <Modal visible={showOnboarding} transparent animationType="slide">
+                <View className="flex-1 bg-white dark:bg-black p-8 justify-center items-center">
+                    <View style={{ width: '100%', maxWidth: 400 }} className="items-center">
+                        
+                        {/* Progress Dots */}
+                        <View className="flex-row gap-2 mb-12">
+                            {[0, 1, 2].map(i => (
+                                <View key={i} className={`h-2 rounded-full ${onboardingStep === i ? 'w-8 bg-blue-600' : 'w-2 bg-gray-200 dark:bg-gray-800'}`} />
+                            ))}
+                        </View>
+      
+                        {onboardingStep === 0 && (
+                            <View className="items-center">
+                                <View className="bg-blue-100 dark:bg-blue-900/30 p-6 rounded-full mb-8">
+                                    <Ionicons name="location" size={64} color="#2563eb" />
+                                </View>
+                                <Text className="text-3xl font-black text-center text-gray-900 dark:text-white mb-4">Live Check-in</Text>
+                                <Text className="text-lg text-center text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Share your real-time journey with family. They'll see your path update as you move.
+                                </Text>
+                            </View>
+                        )}
+      
+                        {onboardingStep === 1 && (
+                            <View className="items-center">
+                                <View className="bg-green-100 dark:bg-green-900/30 p-6 rounded-full mb-8">
+                                    <Ionicons name="shield-checkmark" size={64} color="#16a34a" />
+                                </View>
+                                <Text className="text-3xl font-black text-center text-gray-900 dark:text-white mb-4">Safe Zones</Text>
+                                <Text className="text-lg text-center text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Set up zones like "Home" or "School" to get automatic alerts when your family arrives.
+                                </Text>
+                            </View>
+                        )}
+      
+                        {onboardingStep === 2 && (
+                            <View className="items-center">
+                                <View className="bg-red-100 dark:bg-red-900/30 p-6 rounded-full mb-8">
+                                    <Ionicons name="warning" size={64} color="#dc2626" />
+                                </View>
+                                <Text className="text-3xl font-black text-center text-gray-900 dark:text-white mb-4">Safety SOS</Text>
+                                <Text className="text-lg text-center text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    One-tap emergency alerts notify your entire Family Circle instantly if you need help.
+                                </Text>
+                            </View>
+                        )}
+      
+                        <View className="w-full mt-12 gap-4">
+                            {onboardingStep < 2 ? (
+                                <Button onPress={() => setOnboardingStep(s => s + 1)} className="w-full h-14">
+                                    <Text className="text-white font-bold text-lg">Continue</Text>
+                                </Button>
+                            ) : (
+                                <Button onPress={async () => {
+                                    await SecureStore.setItemAsync('has_seen_onboarding', 'true');
+                                    setShowOnboarding(false);
+                                }} className="w-full h-14">
+                                    <Text className="text-white font-bold text-lg">Get Started</Text>
+                                </Button>
+                            )}
+                            
+                            {onboardingStep < 2 && (
+                                <TouchableOpacity onPress={() => setShowOnboarding(false)} className="items-center">
+                                    <Text className="text-gray-400 font-medium">Skip</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+          </View>
+        );
+      }
+      
