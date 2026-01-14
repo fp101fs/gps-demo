@@ -15,6 +15,14 @@ export interface Point {
   timestamp: number;
 }
 
+export interface SafeZone {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius_meters: number;
+}
+
 interface MapProps {
   currentPoint?: Point;
   points: Point[];
@@ -22,14 +30,16 @@ interface MapProps {
   avatarUrl?: string;
   isSos?: boolean;
   fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
+  safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const fleetMarkersRef = useRef<{ [key: string]: any }>({});
+  const zoneLayersRef = useRef<{ [key: string]: any }>({});
   const polylineRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
@@ -91,7 +101,6 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
 
     mapRef.current = L.map(containerRef.current).setView([startLat, startLng], zoom);
 
-    // Initial Tile Layer
     const tileUrl = theme === 'dark' 
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -113,19 +122,47 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
   // Handle Theme Changes
   useEffect(() => {
       if (!mapRef.current || !tileLayerRef.current) return;
-      
       const tileUrl = theme === 'dark' 
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-      
       tileLayerRef.current.setUrl(tileUrl);
   }, [theme]);
+
+  // Handle Safe Zones
+  useEffect(() => {
+    if (!mapRef.current || !L) return;
+
+    // Remove old zones
+    Object.keys(zoneLayersRef.current).forEach(id => {
+        if (!safeZones.find(z => z.id === id)) {
+            mapRef.current.removeLayer(zoneLayersRef.current[id]);
+            delete zoneLayersRef.current[id];
+        }
+    });
+
+    // Add/Update zones
+    safeZones.forEach(zone => {
+        if (zoneLayersRef.current[zone.id]) {
+            zoneLayersRef.current[zone.id].setLatLng([zone.lat, zone.lng]);
+            zoneLayersRef.current[zone.id].setRadius(zone.radius_meters);
+        } else {
+            const circle = L.circle([zone.lat, zone.lng], {
+                color: '#3b82f6',
+                fillColor: '#3b82f6',
+                fillOpacity: 0.15,
+                radius: zone.radius_meters,
+                weight: 2
+            }).addTo(mapRef.current);
+            circle.bindTooltip(zone.name, { permanent: true, direction: 'top', className: 'zone-tooltip' });
+            zoneLayersRef.current[zone.id] = circle;
+        }
+    });
+  }, [safeZones]);
 
   // Handle Fleet Members
   useEffect(() => {
     if (!mapRef.current || !L) return;
 
-    // Remove markers for members no longer present
     Object.keys(fleetMarkersRef.current).forEach(id => {
         if (!fleetMembers.find(m => m.id === id)) {
             mapRef.current.removeLayer(fleetMarkersRef.current[id]);
@@ -133,7 +170,6 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
         }
     });
 
-    // Update or Add markers
     const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
         latLngs.push([member.lat, member.lng]);
@@ -147,26 +183,21 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
         }
     });
 
-    // Auto-fit bounds if we have members and no active tracking point
     if (!currentPoint && latLngs.length > 0) {
         const bounds = L.latLngBounds(latLngs);
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
   }, [fleetMembers, currentPoint]);
 
-  // Handle Marker Updates (including avatar/SOS change)
   useEffect(() => {
     if (!mapRef.current || !currentPoint || !L) return;
-
     const icon = createIcon(avatarUrl, isSos);
-
     if (!markerRef.current) {
       markerRef.current = L.marker([currentPoint.lat, currentPoint.lng], { icon }).addTo(mapRef.current);
     } else {
       markerRef.current.setLatLng([currentPoint.lat, currentPoint.lng]);
       markerRef.current.setIcon(icon);
     }
-
     if (!isReplayMode) {
       mapRef.current.panTo([currentPoint.lat, currentPoint.lng]);
     }
@@ -174,11 +205,9 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
 
   useEffect(() => {
     if (!mapRef.current || !L) return;
-
     if (polylineRef.current) {
       mapRef.current.removeLayer(polylineRef.current);
     }
-
     if (points.length > 1) {
       const latLngs = points.map(p => [p.lat, p.lng] as [number, number]);
       polylineRef.current = L.polyline(latLngs, { color: '#2563eb', weight: 4 }).addTo(mapRef.current);

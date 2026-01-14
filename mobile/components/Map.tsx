@@ -1,11 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { View, Image } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 
 export interface Point {
   lat: number;
   lng: number;
   timestamp: number;
+}
+
+export interface SafeZone {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radius_meters: number;
 }
 
 interface MapProps {
@@ -15,10 +23,11 @@ interface MapProps {
   avatarUrl?: string;
   isSos?: boolean;
   fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean }[];
+  safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [] }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isSos, fleetMembers = [], safeZones = [] }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -53,6 +62,17 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, isS
           longitudeDelta: 0.0421,
         }}
       >
+        {safeZones.map(zone => (
+            <Circle
+                key={zone.id}
+                center={{ latitude: zone.lat, longitude: zone.lng }}
+                radius={zone.radius_meters}
+                fillColor="rgba(59, 130, 246, 0.15)"
+                strokeColor="#3b82f6"
+                strokeWidth={2}
+            />
+        ))}
+
         {points.length > 1 && (
             <Polyline
                 coordinates={points.map(p => ({ latitude: p.lat, longitude: p.lng }))}
