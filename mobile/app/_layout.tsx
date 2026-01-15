@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { Text, View, SafeAreaView, Image } from 'react-native';
+import { Text, View, SafeAreaView, Image, Platform } from 'react-native';
 import { Button } from '@/components/ui/Button'; 
 import { useColorScheme } from 'nativewind';
 import * as WebBrowser from 'expo-web-browser';

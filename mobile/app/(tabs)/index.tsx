@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
+import * as Battery from 'expo-battery';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -28,6 +29,7 @@ interface Journey {
   privacy_mode?: string;
   allowed_emails?: string[];
   password?: string;
+  note?: string;
 }
 
 export default function HomeScreen() {
@@ -60,6 +62,7 @@ export default function HomeScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
+  const [midnightMode, setMidnightMode] = useState(false);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -121,6 +124,8 @@ export default function HomeScreen() {
           if (saved) setFleetCode(saved);
       };
       loadFleet();
+
+      storage.getItem('midnight_mode').then(val => setMidnightMode(val === 'true'));
 
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
@@ -317,6 +322,14 @@ export default function HomeScreen() {
         const lng = initialLocation.coords.longitude;
         setCurrentPoint({ lat, lng, timestamp: Date.now() / 1000 });
 
+        let batteryLevel = null;
+        let batteryState = null;
+        try {
+            batteryLevel = Math.round((await Battery.getBatteryLevelAsync()) * 100);
+            const state = await Battery.getBatteryStateAsync();
+            batteryState = state === Battery.BatteryState.CHARGING ? 'charging' : (state === Battery.BatteryState.FULL ? 'full' : (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
+        } catch (e) {}
+
         if (shareType === 'address' || shareType === 'current') {
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
@@ -331,7 +344,8 @@ export default function HomeScreen() {
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
             expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
-            share_type: shareType, lat: lat, lng: lng, nickname: userNickname || null
+            share_type: shareType, lat: lat, lng: lng, nickname: userNickname || null,
+            battery_level: batteryLevel, battery_state: batteryState
         }]).select().single();
 
         if (error) { setIsStarting(false); return Alert.alert('Error', 'Could not create session.'); }
@@ -347,7 +361,7 @@ export default function HomeScreen() {
             startTimeRef.current = Date.now();
             setPoints([{ lat, lng, timestamp: Date.now()/1000 }]);
             
-            timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000);
+            timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000) as unknown as NodeJS.Timeout;
 
             locationSubscription.current = await Location.watchPositionAsync(
               { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
@@ -355,8 +369,20 @@ export default function HomeScreen() {
                 const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
                 setCurrentPoint(newPoint);
                 setPoints(prev => [...prev, newPoint]);
+                
+                let currentBatteryLevel = null;
+                let currentBatteryState = null;
+                try {
+                    currentBatteryLevel = Math.round((await Battery.getBatteryLevelAsync()) * 100);
+                    const state = await Battery.getBatteryStateAsync();
+                    currentBatteryState = state === Battery.BatteryState.CHARGING ? 'charging' : (state === Battery.BatteryState.FULL ? 'full' : (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
+                } catch (e) {}
+
                 await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
-                await supabase.from('tracks').update({ lat: newPoint.lat, lng: newPoint.lng }).eq('id', track.id);
+                await supabase.from('tracks').update({ 
+                    lat: newPoint.lat, lng: newPoint.lng,
+                    battery_level: currentBatteryLevel, battery_state: currentBatteryState
+                }).eq('id', track.id);
               }
             );
         }
@@ -464,7 +490,7 @@ export default function HomeScreen() {
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View style={{ height: isLargeScreen ? 450 : 256 }} className="bg-gray-100 dark:bg-gray-800">
-                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} />
+                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} midnightMode={midnightMode} />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">

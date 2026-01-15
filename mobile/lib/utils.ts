@@ -22,3 +22,12 @@ export function getDistanceFromLatLonInM(lat1: number, lon1: number, lat2: numbe
 function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
 }
+
+export function generateFleetCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 to avoid confusion
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}

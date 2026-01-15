@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, useWindowDimensions, Platform, Share } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, useWindowDimensions, Platform, Share, ScrollView, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,9 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { storage } from '@/lib/storage';
+import { generateFleetCode } from '@/lib/utils';
+import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
+import * as Location from 'expo-location';
 
 interface FleetMember {
   id: string;
@@ -21,6 +24,8 @@ interface FleetMember {
   nickname?: string;
   isSos?: boolean;
   lastSeen?: string;
+  battery_level?: number;
+  battery_state?: string;
 }
 
 export default function FleetScreen() {
@@ -34,6 +39,17 @@ export default function FleetScreen() {
   const [loading, setLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      }
+    })();
+  }, []);
 
   // Password Protection State
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -90,7 +106,7 @@ export default function FleetScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tracks')
-        .select('id, lat, lng, avatar_url, user_id, is_sos, nickname, updated_at')
+        .select('id, lat, lng, avatar_url, user_id, is_sos, nickname, updated_at, battery_level, battery_state')
         .eq('party_code', activeCode)
         .eq('is_active', true)
         .not('lat', 'is', null)
@@ -105,7 +121,9 @@ export default function FleetScreen() {
             user_id: m.user_id,
             isSos: m.is_sos,
             nickname: m.nickname,
-            lastSeen: m.updated_at
+            lastSeen: m.updated_at,
+            battery_level: m.battery_level,
+            battery_state: m.battery_state
         })));
       }
       setLoading(false);
@@ -119,8 +137,8 @@ export default function FleetScreen() {
              if (!m.is_active || m.lat === null || m.lng === null) { setMembers(prev => prev.filter(p => p.id !== m.id)); return; }
              setMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at }];
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at, battery_level: m.battery_level, battery_state: m.battery_state } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at, battery_level: m.battery_level, battery_state: m.battery_state }];
              });
           }
     }).subscribe();
@@ -131,6 +149,13 @@ export default function FleetScreen() {
       setActiveCode(null);
       setMembers([]);
       await storage.removeItem('last_fleet_code');
+  };
+
+  const handleCreateFleet = async () => {
+    const newCode = generateFleetCode();
+    setFleetCode(newCode);
+    setActiveCode(newCode);
+    await storage.setItem('last_fleet_code', newCode);
   };
 
   const shareInvite = async () => {
@@ -170,7 +195,15 @@ export default function FleetScreen() {
                 <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join Family Circle</Text>
                 <Text className="text-gray-500 dark:text-gray-400 mb-6">Enter your family code to see everyone on the map.</Text>
                 <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="Enter Family Code" placeholderTextColor="#9ca3af" className="bg-gray-100 dark:bg-gray-800 dark:text-white p-4 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 text-lg" autoCapitalize="none" />
-                <Button onPress={() => connectToCircle(fleetCode)} className="w-full"><Text className="text-white font-bold">Connect to Family</Text></Button>
+                <Button onPress={() => connectToCircle(fleetCode)} className="w-full mb-4"><Text className="text-white font-bold">Connect to Family</Text></Button>
+                
+                <View className="flex-row items-center gap-4 mb-4">
+                    <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-800" />
+                    <Text className="text-gray-400 font-medium">OR</Text>
+                    <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-800" />
+                </View>
+
+                <Button onPress={handleCreateFleet} variant="secondary" className="w-full bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900"><Text className="text-blue-600 dark:text-blue-400 font-bold">Create New Circle</Text></Button>
              </View>
         </View>
       ) : activeCode && (
@@ -195,7 +228,49 @@ export default function FleetScreen() {
                      </View>
                  )}
             </View>
-            <Map points={[]} fleetMembers={members} theme={colorScheme as 'light' | 'dark'} />
+            <Map points={[]} fleetMembers={members} theme={colorScheme as 'light' | 'dark'} currentPoint={currentLocation ? { ...currentLocation, timestamp: Date.now() } : undefined} />
+            
+            <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
+                <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
+                <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3 px-2">Family Members ({members.length})</Text>
+                <ScrollView>
+                    {members.map(member => (
+                        <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                            <View className="relative">
+                                {member.avatarUrl ? (
+                                    <Image source={{ uri: member.avatarUrl }} className="w-10 h-10 rounded-full" />
+                                ) : (
+                                    <View className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 justify-center items-center">
+                                        <Ionicons name="person" size={20} color="white" />
+                                    </View>
+                                )}
+                                {member.isSos && <View className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white"><Ionicons name="warning" size={10} color="white" /></View>}
+                            </View>
+                            <View className="flex-1 ml-3">
+                                <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
+                                <View className="flex-row items-center gap-2">
+                                    {member.lastSeen && <Text className="text-xs text-gray-500">{new Date(member.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
+                                    {currentLocation && <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">• {formatDistance(calculateDistance(currentLocation, member))}</Text>}
+                                </View>
+                            </View>
+                            {member.battery_level !== undefined && (
+                                <View className="items-end">
+                                    <View className="flex-row items-center gap-1">
+                                        <Text className={`text-xs font-bold ${member.battery_level < 20 ? 'text-red-500' : 'text-green-600'}`}>{member.battery_level}%</Text>
+                                        <Ionicons 
+                                            name={member.battery_state === 'charging' ? 'battery-charging' : (member.battery_level < 20 ? 'battery-dead' : 'battery-full')} 
+                                            size={16} 
+                                            color={member.battery_level < 20 ? '#ef4444' : '#16a34a'} 
+                                        />
+                                    </View>
+                                    <Text className="text-[10px] text-gray-400 capitalize">{member.battery_state || 'Unknown'}</Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+                    {members.length === 0 && <Text className="text-center text-gray-500 py-4">Waiting for family to join...</Text>}
+                </ScrollView>
+            </View>
         </View>
       )}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>

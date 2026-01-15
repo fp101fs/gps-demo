@@ -1,4 +1,4 @@
-import { View, ViewProps, Text } from 'react-native';
+import { View, ViewProps, Text, TextProps } from 'react-native';
 import { cn } from '../../lib/utils';
 
 export function Card({ className, ...props }: ViewProps) {
@@ -17,7 +17,7 @@ export function CardHeader({ className, ...props }: ViewProps) {
   return <View className={cn('p-6 pb-2', className)} {...props} />;
 }
 
-export function CardTitle({ className, ...props }: ViewProps & { children: React.ReactNode }) {
+export function CardTitle({ className, ...props }: TextProps) {
   return (
     <Text className={cn('text-2xl font-semibold leading-none tracking-tight text-gray-900', className)} {...props} />
   );

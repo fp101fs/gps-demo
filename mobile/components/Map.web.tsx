@@ -34,9 +34,10 @@ interface MapProps {
   fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
+  midnightMode?: boolean;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', midnightMode = false }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -133,16 +134,25 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
 
     mapRef.current = L.map(containerRef.current).setView([startLat, startLng], zoom);
 
-    const tileUrl = theme === 'dark' 
+    // Midnight Mode: Use dark tiles. Standard Dark Mode: Use light tiles but inverted. Light Mode: Standard.
+    const useDarkTiles = theme === 'dark' && midnightMode;
+    const tileUrl = useDarkTiles
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         
-    const attribution = theme === 'dark'
+    const attribution = useDarkTiles
         ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         : '&copy; OpenStreetMap contributors';
 
     tileLayerRef.current = L.tileLayer(tileUrl, { attribution }).addTo(mapRef.current);
     
+    // Apply Invert Filter for Standard Dark Mode
+    if (theme === 'dark' && !midnightMode) {
+        tileLayerRef.current.getContainer().style.filter = 'invert(100%)';
+    } else {
+        if (tileLayerRef.current.getContainer()) tileLayerRef.current.getContainer().style.filter = 'none';
+    }
+
     setIsReady(true);
 
     return () => {
@@ -166,11 +176,23 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   // Handle Theme Changes
   useEffect(() => {
       if (!mapRef.current || !tileLayerRef.current) return;
-      const tileUrl = theme === 'dark' 
+      
+      const useDarkTiles = theme === 'dark' && midnightMode;
+      const tileUrl = useDarkTiles
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      
       tileLayerRef.current.setUrl(tileUrl);
-  }, [theme]);
+
+      // Update Filter
+      if (tileLayerRef.current.getContainer()) {
+        if (theme === 'dark' && !midnightMode) {
+            tileLayerRef.current.getContainer().style.filter = 'invert(100%)';
+        } else {
+            tileLayerRef.current.getContainer().style.filter = 'none';
+        }
+      }
+  }, [theme, midnightMode]);
 
   // Handle Safe Zones
   useEffect(() => {

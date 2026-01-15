@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { View, Image, Text, TouchableOpacity } from 'react-native';
 import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
+import { calculateDistance, formatDistance } from '../lib/LocationUtils';
 
 export interface Point {
   lat: number;
@@ -24,12 +25,13 @@ interface MapProps {
   avatarUrl?: string;
   nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string }[];
+  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string; battery_level?: number; battery_state?: string }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
+  midnightMode?: boolean;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [] }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', midnightMode = false }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   const getRelativeTime = (isoString?: string) => {
@@ -138,6 +140,23 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                     )}
                     {member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000) && (
                         <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 2, fontWeight: 'bold' }}>{getRelativeTime(member.lastSeen)}</Text>
+                    )}
+                    {currentPoint && (
+                        <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.8)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                            <Text style={{ color: 'white', fontSize: 9, fontWeight: 'bold' }}>
+                                {formatDistance(calculateDistance(currentPoint, member))}
+                            </Text>
+                        </View>
+                    )}
+                    {member.battery_level !== undefined && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginTop: 1 }}>
+                            <Ionicons 
+                                name={member.battery_state === 'charging' ? 'battery-charging' : (member.battery_level < 20 ? 'battery-dead' : 'battery-full')} 
+                                size={10} 
+                                color={member.battery_level < 20 ? '#ef4444' : '#22c55e'} 
+                            />
+                            <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 2 }}>{member.battery_level}%</Text>
+                        </View>
                     )}
                 </View>
             </Marker>
