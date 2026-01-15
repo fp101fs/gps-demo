@@ -28,10 +28,9 @@ interface MapProps {
   fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string; battery_level?: number; battery_state?: string }[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
-  midnightMode?: boolean;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', midnightMode = false }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   const getRelativeTime = (isoString?: string) => {

@@ -62,7 +62,6 @@ export default function HomeScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
-  const [midnightMode, setMidnightMode] = useState(false);
   
   const [durationOption, setDurationOption] = useState<'20m' | '2h' | '10h' | 'Custom'>('20m');
   const [customDuration, setCustomDuration] = useState('60');
@@ -124,8 +123,6 @@ export default function HomeScreen() {
           if (saved) setFleetCode(saved);
       };
       loadFleet();
-
-      storage.getItem('midnight_mode').then(val => setMidnightMode(val === 'true'));
 
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
@@ -490,7 +487,7 @@ export default function HomeScreen() {
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View style={{ height: isLargeScreen ? 450 : 256 }} className="bg-gray-100 dark:bg-gray-800">
-                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} midnightMode={midnightMode} />
+                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">
