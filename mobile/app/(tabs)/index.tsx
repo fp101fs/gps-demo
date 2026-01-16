@@ -322,10 +322,13 @@ export default function HomeScreen() {
         let batteryLevel = null;
         let batteryState = null;
         try {
-            batteryLevel = Math.round((await Battery.getBatteryLevelAsync()) * 100);
+            const level = await Battery.getBatteryLevelAsync();
+            batteryLevel = Math.round(level * 100);
             const state = await Battery.getBatteryStateAsync();
             batteryState = state === Battery.BatteryState.CHARGING ? 'charging' : (state === Battery.BatteryState.FULL ? 'full' : (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
         } catch (e) {}
+
+        const displayName = userNickname || user.user_metadata?.full_name?.split(' ')[0] || user.user_metadata?.name?.split(' ')[0] || user.user_metadata?.given_name || 'Family Member';
 
         if (shareType === 'address' || shareType === 'current') {
             try {
@@ -341,7 +344,7 @@ export default function HomeScreen() {
             party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
             expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
-            share_type: shareType, lat: lat, lng: lng, nickname: userNickname || null,
+            share_type: shareType, lat: lat, lng: lng, nickname: displayName,
             battery_level: batteryLevel, battery_state: batteryState
         }]).select().single();
 
@@ -370,7 +373,8 @@ export default function HomeScreen() {
                 let currentBatteryLevel = null;
                 let currentBatteryState = null;
                 try {
-                    currentBatteryLevel = Math.round((await Battery.getBatteryLevelAsync()) * 100);
+                    const level = await Battery.getBatteryLevelAsync();
+                    currentBatteryLevel = Math.round(level * 100);
                     const state = await Battery.getBatteryStateAsync();
                     currentBatteryState = state === Battery.BatteryState.CHARGING ? 'charging' : (state === Battery.BatteryState.FULL ? 'full' : (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
                 } catch (e) {}
@@ -509,15 +513,27 @@ export default function HomeScreen() {
                 </View>
 
                 <CardContent className="pt-6">
+                    <View className="flex-row items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg mb-4">
+                        <View className="flex-row items-center gap-3">
+                            {user?.user_metadata?.avatar_url ? <Image source={{ uri: user.user_metadata.avatar_url }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
+                            <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
+                        </View>
+                        <Switch 
+                            value={useProfileIcon} 
+                            onValueChange={async (val) => {
+                                setUseProfileIcon(val);
+                                if (isTracking && trackId && user) {
+                                    await supabase.from('tracks').update({ 
+                                        avatar_url: val ? user.user_metadata.avatar_url : null 
+                                    }).eq('id', trackId);
+                                }
+                            }} 
+                            trackColor={{ false: '#e2e8f0', true: '#2563eb' }} 
+                        />
+                    </View>
+
                     {!isTracking ? (
                         <View className="gap-4">
-                            <View className="flex-row items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                <View className="flex-row items-center gap-3">
-                                    {user?.user_metadata?.avatar_url ? <Image source={{ uri: user.user_metadata.avatar_url }} className="w-8 h-8 rounded-full" /> : <View className="w-8 h-8 rounded-full bg-gray-300" />}
-                                    <Text className="text-gray-700 dark:text-gray-200 font-medium">Use Profile Picture</Text>
-                                </View>
-                                <Switch value={useProfileIcon} onValueChange={setUseProfileIcon} trackColor={{ false: '#e2e8f0', true: '#2563eb' }} />
-                            </View>
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                                  <Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Your Name / Nickname</Text>
                                  <TextInput value={userNickname} onChangeText={setUserNickname} placeholder="e.g. 'Mom', 'Billy'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" />

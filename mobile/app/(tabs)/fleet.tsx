@@ -14,6 +14,7 @@ import { storage } from '@/lib/storage';
 import { generateFleetCode } from '@/lib/utils';
 import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
 import * as Location from 'expo-location';
+import { useAuth } from '@/lib/auth';
 
 interface FleetMember {
   id: string;
@@ -31,6 +32,7 @@ interface FleetMember {
 export default function FleetScreen() {
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
+  const { user } = useAuth();
   const { code: inviteCode } = useLocalSearchParams<{ code?: string }>();
   
   const [fleetCode, setFleetCode] = useState('');
@@ -240,14 +242,15 @@ export default function FleetScreen() {
                                 {member.avatarUrl ? (
                                     <Image source={{ uri: member.avatarUrl }} className="w-10 h-10 rounded-full" />
                                 ) : (
-                                    <View className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 justify-center items-center">
-                                        <Ionicons name="person" size={20} color="white" />
-                                    </View>
+                                    <Image source={require('@/assets/images/marker-green-cross.png')} className="w-10 h-10" resizeMode="contain" />
                                 )}
                                 {member.isSos && <View className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white"><Ionicons name="warning" size={10} color="white" /></View>}
                             </View>
                             <View className="flex-1 ml-3">
-                                <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
+                                <View className="flex-row items-center gap-1">
+                                    <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
+                                    {user && member.user_id === user.id && <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">(You)</Text>}
+                                </View>
                                 <View className="flex-row items-center gap-2">
                                     {member.lastSeen && <Text className="text-xs text-gray-500">{new Date(member.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
                                     {currentLocation && <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">• {formatDistance(calculateDistance(currentLocation, member))}</Text>}
