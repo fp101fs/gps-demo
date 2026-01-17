@@ -88,6 +88,16 @@ function InitialLayout() {
   });
 
   useEffect(() => {
+    // Listen for incoming links (Deep Linking)
+    const handleUrl = (event: { url: string }) => {
+        // Supabase detectSessionInUrl usually handles it, but this ensures we catch it
+        console.log("Deep link:", event.url);
+    };
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
     if (loaded && !loading) {
       SplashScreen.hideAsync();
     }
