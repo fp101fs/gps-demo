@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "FindMyFam",
-    "slug": "findmyfam",
+    "name": "location.tools",
+    "slug": "location-tools",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "findmyfam",
+    "scheme": "location-tools",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,23 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.fp101fs.findmyfam",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to keep your Family Circle safe and updated."
-      }
+      "bundleIdentifier": "com.fp101fs.locationtools"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.fp101fs.findmyfam",
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ],
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.fp101fs.locationtools"
     },
     "web": {
       "bundler": "metro",

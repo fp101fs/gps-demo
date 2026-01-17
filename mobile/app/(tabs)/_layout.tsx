@@ -41,7 +41,7 @@ export default function TabLayout() {
                 fontWeight: 'bold', 
                 color: colorScheme === 'dark' ? 'white' : 'black' 
               }}>
-                FindMyFam
+                location.tools
               </Text>
             </View>
           ),

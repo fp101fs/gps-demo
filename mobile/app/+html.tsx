@@ -13,13 +13,13 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
         {/* Social Preview Tags */}
-        <title>FindMyFam - Keep Your Circle Safe</title>
+        <title>location.tools - Keep Your Circle Safe</title>
         <meta name="description" content="Real-time family location tracking, safe zones, and emergency SOS alerts." />
-        <meta property="og:title" content="FindMyFam - Live Location" />
+        <meta property="og:title" content="location.tools - Live Location" />
         <meta property="og:description" content="Follow my live journey and keep our family circle safe." />
         <meta property="og:image" content="https://gps-demo.vercel.app/favicon.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="FindMyFam - Live Location" />
+        <meta name="twitter:title" content="location.tools - Live Location" />
         <meta name="twitter:description" content="Follow my live journey and keep our family circle safe." />
         <meta name="twitter:image" content="https://gps-demo.vercel.app/favicon.png" />
 

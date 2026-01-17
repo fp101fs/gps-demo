@@ -24,6 +24,19 @@ export interface SafeZone {
   radius_meters: number;
 }
 
+export interface FleetMember {
+  id: string;
+  lat: number;
+  lng: number;
+  avatarUrl?: string;
+  nickname?: string;
+  isSos?: boolean;
+  lastSeen?: string;
+  battery_level?: number;
+  battery_state?: string;
+  isGhost?: boolean;
+}
+
 interface MapProps {
   currentPoint?: Point;
   points: Point[];
@@ -31,12 +44,13 @@ interface MapProps {
   avatarUrl?: string;
   nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string }[];
+  fleetMembers?: FleetMember[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
+  onMemberSelect?: (member: FleetMember) => void;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', onMemberSelect }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -232,8 +246,18 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
             if (icon) fleetMarkersRef.current[member.id].setIcon(icon);
+            // Update opacity for ghosts
+            fleetMarkersRef.current[member.id].setOpacity(member.isGhost ? 0.7 : 1);
         } else {
-            const marker = L.marker([member.lat, member.lng], { icon }).addTo(mapRef.current);
+            const marker = L.marker([member.lat, member.lng], { 
+                icon,
+                opacity: member.isGhost ? 0.7 : 1 
+            }).addTo(mapRef.current);
+            
+            marker.on('click', () => {
+                if (onMemberSelect) onMemberSelect(member);
+            });
+            
             fleetMarkersRef.current[member.id] = marker;
         }
     });

@@ -169,7 +169,7 @@ export default function FleetScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       if (Platform.OS !== 'web') {
-          await Share.share({ message: `Join my Family Circle on FindMyFam! Click here: ${url}`, url });
+          await Share.share({ message: `Join my Family Circle on location.tools! Click here: ${url}`, url });
       }
   };
 

@@ -68,6 +68,11 @@ export default function HomeScreen() {
   const [shareNote, setShareNote] = useState('');
   const [shareType, setShareType] = useState<'live' | 'current' | 'address'>('live');
 
+  // New UI State
+  const [activeTab, setActiveTab] = useState<'share' | 'tools'>('share');
+  const [ghosts, setGhosts] = useState<any[]>([]);
+  const [showGhostModal, setShowGhostModal] = useState(false);
+
   // Privacy Modal State
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [shareSuccessVisible, setShareSuccessVisible] = useState(false);
@@ -127,7 +132,7 @@ export default function HomeScreen() {
       const checkAndWelcome = async () => {
           const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
           if (count === 0) {
-              await Notifications.send(user.id, 'Welcome to FindMyFam!', 'Start a live check-in or manage your Safe Zones below.', 'success');
+              await Notifications.send(user.id, 'Welcome to location.tools!', 'Start a live check-in or manage your Safe Zones below.', 'success');
           }
       };
       checkAndWelcome();
@@ -147,7 +152,7 @@ export default function HomeScreen() {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
           if (loc) setCurrentPoint({ lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 });
       } else {
-          Alert.alert('Permission Required', 'FindMyFam needs location access to work correctly.');
+          Alert.alert('Permission Required', 'location.tools needs location access to work correctly.');
       }
   };
 
@@ -296,7 +301,37 @@ export default function HomeScreen() {
     if (data) setPastJourneys(data);
   };
 
-  const startTracking = async () => {
+  const generateGhosts = (centerLat: number, centerLng: number) => {
+      const newGhosts = Array.from({ length: 3 }).map((_, i) => ({
+          id: `ghost-${i}`,
+          lat: centerLat + (Math.random() - 0.5) * 0.005,
+          lng: centerLng + (Math.random() - 0.5) * 0.005,
+          nickname: `Demo User ${i + 1}`,
+          isGhost: true,
+          battery_level: Math.floor(Math.random() * 100),
+          battery_state: 'unplugged'
+      }));
+      setGhosts(newGhosts);
+  };
+
+  const removeGhosts = () => {
+      setGhosts([]);
+      setShowGhostModal(false);
+  };
+
+  useEffect(() => {
+      if (ghosts.length === 0 || !isTracking) return;
+      const interval = setInterval(() => {
+          setGhosts(prev => prev.map(g => ({
+              ...g,
+              lat: g.lat + (Math.random() - 0.5) * 0.0005,
+              lng: g.lng + (Math.random() - 0.5) * 0.0005,
+          })));
+      }, 2000);
+      return () => clearInterval(interval);
+  }, [ghosts.length, isTracking]);
+
+  const startTracking = async (useDefaults = false) => {
     if (isStarting) return;
     setIsStarting(true);
     try {
@@ -305,19 +340,33 @@ export default function HomeScreen() {
         if (status !== 'granted') { setIsStarting(false); return Alert.alert('Permission denied', 'Allow location access.'); }
         if (!user) { setIsStarting(false); return; }
 
-        let mins = 20;
-        if (durationOption === '2h') mins = 120;
-        else if (durationOption === '10h') mins = 600;
-        else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
+        // Default Config
+        let mins = 60; // Default 1 hour
+        let type = 'live';
+        let note = '';
+        
+        if (!useDefaults) {
+             if (durationOption === '2h') mins = 120;
+             else if (durationOption === '10h') mins = 600;
+             else if (durationOption === 'Custom') mins = parseInt(customDuration) || 20;
+             type = shareType;
+             note = shareNote;
+        } else {
+            // Force defaults for 1-click
+            setShareType('live');
+            setDurationOption('2h'); // set UI to match
+        }
 
         const expiresAt = new Date(Date.now() + mins * 60000).toISOString();
-        let finalNote = shareNote;
+        let finalNote = note;
         const initialLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
         if (!initialLocation) { setIsStarting(false); return Alert.alert('Error', 'Could not determine location.'); }
 
         const lat = initialLocation.coords.latitude;
         const lng = initialLocation.coords.longitude;
         setCurrentPoint({ lat, lng, timestamp: Date.now() / 1000 });
+
+        if (useDefaults) generateGhosts(lat, lng);
 
         let batteryLevel = null;
         let batteryState = null;
@@ -330,21 +379,30 @@ export default function HomeScreen() {
 
         const displayName = userNickname || user.user_metadata?.full_name?.split(' ')[0] || user.user_metadata?.name?.split(' ')[0] || user.user_metadata?.given_name || 'Family Member';
 
-        if (shareType === 'address' || shareType === 'current') {
+        if (type === 'address' || type === 'current') {
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
                 const data = await res.json();
                 const addr = data.display_name;
-                if (addr) { setAddress(addr); if (shareType === 'address') finalNote = (shareNote ? shareNote + " - " : "") + addr; }
+                if (addr) { setAddress(addr); if (type === 'address') finalNote = (note ? note + " - " : "") + addr; }
             } catch (e) {}
         }
 
+        // Auto-generate code if defaults are used and no code exists
+        let currentFleetCode = fleetCode;
+        if (useDefaults && !currentFleetCode) {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            currentFleetCode = '';
+            for (let i = 0; i < 6; i++) currentFleetCode += chars.charAt(Math.floor(Math.random() * chars.length));
+            setFleetCode(currentFleetCode);
+        }
+
         const { data: track, error } = await supabase.from('tracks').insert([{ 
-            is_active: shareType === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.user_metadata.avatar_url : null, 
-            party_code: fleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
+            is_active: type === 'live', user_id: user.id, avatar_url: useProfileIcon ? user.user_metadata.avatar_url : null, 
+            party_code: currentFleetCode || null, proximity_enabled: proximityEnabled, proximity_meters: parseInt(proximityDistance) || 500,
             arrival_enabled: arrivalEnabled, arrival_meters: parseInt(arrivalDistance) || 50,
-            expires_at: shareType === 'live' ? expiresAt : null, note: finalNote || null,
-            share_type: shareType, lat: lat, lng: lng, nickname: displayName,
+            expires_at: type === 'live' ? expiresAt : null, note: finalNote || null,
+            share_type: type, lat: lat, lng: lng, nickname: displayName,
             battery_level: batteryLevel, battery_state: batteryState
         }]).select().single();
 
@@ -354,9 +412,17 @@ export default function HomeScreen() {
         setTrackId(track.id);
         await storage.setItem('current_track_id', track.id);
         setIsStarting(false);
-        setShareModalVisible(true);
+        
+        if (useDefaults) {
+             const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/track/${track.id}`;
+             if (Platform.OS !== 'web') {
+                 // Optional: trigger share
+             }
+        } else {
+             setShareModalVisible(true);
+        }
 
-        if (shareType === 'live') {
+        if (type === 'live') {
             setCurrentExpiresAt(expiresAt);
             setIsTracking(true);
             startTimeRef.current = Date.now();
@@ -481,7 +547,7 @@ export default function HomeScreen() {
                             </View>
                             <View className="flex-1">
                                 <Text className="text-lg font-bold text-gray-900 dark:text-white">GPS Access Needed</Text>
-                                <Text className="text-sm text-gray-600 dark:text-gray-400">To keep your family circle safe, FindMyFam needs to see your location.</Text>
+                                <Text className="text-sm text-gray-600 dark:text-gray-400">To keep your family circle safe, location.tools needs to see your location.</Text>
                             </View>
                         </View>
                         <Button onPress={requestPermission} variant="default" className="w-full h-12">
@@ -492,10 +558,59 @@ export default function HomeScreen() {
                 </Card>
             )}
 
+            {!isTracking && locationPermission === 'granted' && (
+                <View className="w-full mb-6">
+                    <View className="flex-row bg-gray-200 dark:bg-gray-800 p-1 rounded-xl mb-6">
+                        <TouchableOpacity onPress={() => setActiveTab('share')} className={`flex-1 py-3 rounded-lg items-center ${activeTab === 'share' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''}`}>
+                            <Text className={`font-bold ${activeTab === 'share' ? 'text-blue-600 dark:text-white' : 'text-gray-500'}`}>Share Location</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setActiveTab('tools')} className={`flex-1 py-3 rounded-lg items-center ${activeTab === 'tools' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''}`}>
+                            <Text className={`font-bold ${activeTab === 'tools' ? 'text-blue-600 dark:text-white' : 'text-gray-500'}`}>Location Tools</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {activeTab === 'share' ? (
+                        <Card className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+                            <CardContent className="pt-8 pb-8 items-center">
+                                <View className="bg-blue-100 dark:bg-blue-900/30 p-6 rounded-full mb-6">
+                                    <Ionicons name="location" size={64} color="#2563eb" />
+                                </View>
+                                <Text className="text-2xl font-black text-center text-gray-900 dark:text-white mb-2">Ready to Share?</Text>
+                                <Text className="text-gray-500 dark:text-gray-400 text-center mb-8 px-4">Start sharing your live location with your family in just one click.</Text>
+                                <Button onPress={() => startTracking(true)} className="w-full h-16 rounded-2xl shadow-lg shadow-blue-500/30">
+                                    <Text className="text-white font-bold text-xl">Enable Location Services</Text>
+                                </Button>
+                                <TouchableOpacity onPress={() => setShareType('address')} className="mt-4">
+                                    <Text className="text-blue-600 dark:text-blue-400 font-medium">Configure options...</Text>
+                                </TouchableOpacity>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <Card className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+                            <CardContent className="pt-12 pb-12 items-center">
+                                <Ionicons name="construct-outline" size={48} color="#9ca3af" />
+                                <Text className="text-gray-400 font-bold mt-4">Tools coming soon</Text>
+                            </CardContent>
+                        </Card>
+                    )}
+                </View>
+            )}
+
             {/* Tracking Card */}
             <Card className="mb-6 overflow-hidden bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
                 <View style={{ height: isLargeScreen ? 450 : 256 }} className="bg-gray-100 dark:bg-gray-800">
-                    <Map currentPoint={currentPoint} points={points} avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} isSos={isSos} theme={colorScheme as 'light' | 'dark'} fleetMembers={adHocMembers} safeZones={safeZones} />
+                    <Map 
+                        currentPoint={currentPoint} 
+                        points={points} 
+                        avatarUrl={useProfileIcon ? user?.user_metadata?.avatar_url : undefined} 
+                        isSos={isSos} 
+                        theme={colorScheme as 'light' | 'dark'} 
+                        fleetMembers={[...adHocMembers, ...ghosts]} 
+                        safeZones={safeZones} 
+                        onMemberSelect={(m) => {
+                            if (m.isGhost) setShowGhostModal(true);
+                        }}
+                    />
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">
@@ -567,7 +682,7 @@ export default function HomeScreen() {
                             )}
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg"><Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Add a Note (Optional)</Text><TextInput value={shareNote} onChangeText={setShareNote} placeholder="e.g. 'Heading to school!'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600" /></View>
                             <View className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg"><Text className="text-xs font-semibold uppercase text-gray-500 mb-1">Family Circle Code (Optional)</Text><TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="e.g. 'the-smiths'" placeholderTextColor="#9ca3af" className="bg-white dark:bg-gray-700 dark:text-white p-2 rounded border border-gray-200 dark:border-gray-600 autoCapitalize='none'" /></View>
-                            <Button onPress={startTracking} className="w-full" disabled={isStarting}><Text className="text-white font-bold">{isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}</Text></Button>
+                            <Button onPress={() => startTracking(false)} className="w-full" disabled={isStarting}><Text className="text-white font-bold">{isStarting ? 'Sharing...' : (shareType === 'live' ? 'Start Live Journey' : `Share ${shareType === 'current' ? 'Location' : 'Address'}`)}</Text></Button>
                         </View>
                     ) : (
                         <View className="gap-4">
@@ -749,7 +864,25 @@ export default function HomeScreen() {
                     </View>
                 </View>
             </Modal>
-          </View>
-        );
-      }
-      
+                <Modal visible={showGhostModal} transparent={true} animationType="fade" onRequestClose={() => setShowGhostModal(false)}>
+                  <View className="flex-1 justify-center items-center bg-black/50 p-6">
+                      <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
+                          <View className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-full mb-4">
+                              <Ionicons name="people" size={48} color="#9333ea" />
+                          </View>
+                          <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Live Demo Mode</Text>
+                          <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">
+                              We've added some "Ghost" users to show you how real-time fleet tracking looks when your family joins.
+                          </Text>
+                          <Button onPress={removeGhosts} className="w-full mb-3 bg-purple-600">
+                              <Text className="text-white font-bold">Clear Ghosts</Text>
+                          </Button>
+                          <TouchableOpacity onPress={() => setShowGhostModal(false)} className="py-2">
+                              <Text className="text-gray-400 font-medium">Keep for now</Text>
+                          </TouchableOpacity>
+                      </View>
+                  </View>
+                </Modal>
+              </View>
+            );
+          }

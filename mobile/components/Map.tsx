@@ -18,6 +18,19 @@ export interface SafeZone {
   radius_meters: number;
 }
 
+export interface FleetMember {
+  id: string;
+  lat: number;
+  lng: number;
+  avatarUrl?: string;
+  nickname?: string;
+  isSos?: boolean;
+  lastSeen?: string;
+  battery_level?: number;
+  battery_state?: string;
+  isGhost?: boolean;
+}
+
 interface MapProps {
   currentPoint?: Point;
   points: Point[];
@@ -25,12 +38,13 @@ interface MapProps {
   avatarUrl?: string;
   nickname?: string;
   isSos?: boolean;
-  fleetMembers?: { id: string; lat: number; lng: number; avatarUrl?: string; nickname?: string; isSos?: boolean; lastSeen?: string; battery_level?: number; battery_state?: string }[];
+  fleetMembers?: FleetMember[];
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
+  onMemberSelect?: (member: FleetMember) => void;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light' }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], onMemberSelect }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   const getRelativeTime = (isoString?: string) => {
@@ -114,6 +128,8 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                 key={member.id}
                 coordinate={{ latitude: member.lat, longitude: member.lng }}
                 title={member.nickname || 'Family Member'}
+                onPress={() => onMemberSelect?.(member)}
+                opacity={member.isGhost ? 0.6 : 1}
             >
                 <View style={{ alignItems: 'center' }}>
                     {member.nickname && (

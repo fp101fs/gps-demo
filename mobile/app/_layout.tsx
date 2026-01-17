@@ -62,7 +62,7 @@ function SignInScreen() {
                         style={{ width: 80, height: 80, borderRadius: 16 }} 
                     />
                 </View>
-                <Text className="text-4xl font-black text-gray-900 dark:text-white mb-2">FindMyFam</Text>
+                <Text className="text-4xl font-black text-gray-900 dark:text-white mb-2">location.tools</Text>
                 <Text className="text-gray-500 dark:text-gray-400 text-center text-lg">Keep your family circle safe and connected.</Text>
              </View>
 
