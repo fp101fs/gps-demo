@@ -411,6 +411,12 @@ export default function HomeScreen() {
 
         setTrackId(track.id);
         await storage.setItem('current_track_id', track.id);
+        if (currentFleetCode) {
+            await storage.setItem('last_fleet_code', currentFleetCode);
+        }
+        if (useDefaults) {
+            await storage.setItem('is_demo_mode', 'true');
+        }
         setIsStarting(false);
         
         if (useDefaults) {
@@ -418,6 +424,8 @@ export default function HomeScreen() {
              if (Platform.OS !== 'web') {
                  // Optional: trigger share
              }
+             // Navigate to Fleet Tab
+             router.push('/fleet');
         } else {
              setShareModalVisible(true);
         }
