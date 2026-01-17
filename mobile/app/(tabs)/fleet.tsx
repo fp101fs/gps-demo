@@ -42,6 +42,7 @@ export default function FleetScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [myTrackId, setMyTrackId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -50,6 +51,8 @@ export default function FleetScreen() {
         const loc = await Location.getCurrentPositionAsync({});
         setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       }
+      const tid = await storage.getItem('current_track_id');
+      setMyTrackId(tid);
     })();
   }, []);
 
@@ -249,7 +252,11 @@ export default function FleetScreen() {
                             <View className="flex-1 ml-3">
                                 <View className="flex-row items-center gap-1">
                                     <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
-                                    {user && member.user_id === user.id && <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">(You)</Text>}
+                                    {myTrackId === member.id ? (
+                                        <Text className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded">(This Device)</Text>
+                                    ) : (
+                                        user && member.user_id === user.id && <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">(You)</Text>
+                                    )}
                                 </View>
                                 <View className="flex-row items-center gap-2">
                                     {member.lastSeen && <Text className="text-xs text-gray-500">{new Date(member.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}

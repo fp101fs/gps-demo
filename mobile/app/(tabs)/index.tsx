@@ -352,6 +352,7 @@ export default function HomeScreen() {
         await supabase.from('points').insert([{ track_id: track.id, lat: lat, lng: lng, timestamp: new Date().toISOString() }]);
 
         setTrackId(track.id);
+        await storage.setItem('current_track_id', track.id);
         setIsStarting(false);
         setShareModalVisible(true);
 
@@ -405,7 +406,10 @@ export default function HomeScreen() {
     if (locationSubscription.current) { try { locationSubscription.current.remove(); } catch(e) {} locationSubscription.current = null; }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setIsTracking(false);
-    if (trackId) await supabase.from('tracks').update({ is_active: false, end_time: new Date().toISOString() }).eq('id', trackId);
+    if (trackId) {
+        await supabase.from('tracks').update({ is_active: false, end_time: new Date().toISOString() }).eq('id', trackId);
+        await storage.removeItem('current_track_id');
+    }
     Alert.alert('Stopped', 'Journey saved.');
     fetchPastJourneys();
   };
