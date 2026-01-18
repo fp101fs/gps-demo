@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import * as Battery from 'expo-battery';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Notifications } from '@/lib/notifications';
@@ -35,12 +35,20 @@ interface Journey {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ action?: string, code?: string }>();
   const { user, signOut } = useAuth();
   const { colorScheme } = useColorScheme();
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024;
   
   const [isTracking, setIsTracking] = useState(false);
+
+  useEffect(() => {
+      if (params.action === 'start_tracking' && params.code && !isTracking && !isStarting) {
+          setFleetCode(params.code);
+          startTracking(true, params.code);
+      }
+  }, [params.action, params.code]);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
   const [points, setPoints] = useState<Point[]>([]);
   const [trackId, setTrackId] = useState<string | null>(null);
@@ -331,7 +339,7 @@ export default function HomeScreen() {
       return () => clearInterval(interval);
   }, [ghosts.length, isTracking]);
 
-  const startTracking = async (useDefaults = false) => {
+  const startTracking = async (useDefaults = false, overrideCode?: string) => {
     if (isStarting) return;
     setIsStarting(true);
     try {
@@ -389,7 +397,7 @@ export default function HomeScreen() {
         }
 
         // Auto-generate code if defaults are used and no code exists
-        let currentFleetCode = fleetCode;
+        let currentFleetCode = overrideCode || fleetCode;
         if (useDefaults && !currentFleetCode) {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             currentFleetCode = '';
@@ -891,6 +899,25 @@ export default function HomeScreen() {
                       </View>
                   </View>
                 </Modal>
-              </View>
-            );
-          }
+                    <Modal visible={showGhostModal} transparent={true} animationType="fade" onRequestClose={() => setShowGhostModal(false)}>
+                      <View className="flex-1 justify-center items-center bg-black/50 p-6">
+                          <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
+                              <View className="bg-purple-100 dark:bg-purple-900/30 p-4 rounded-full mb-4">
+                                  <Ionicons name="people" size={48} color="#9333ea" />
+                              </View>
+                              <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Live Demo Mode</Text>
+                              <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">
+                                  We've added some "Ghost" users to show you how real-time fleet tracking looks when your family joins.
+                              </Text>
+                              <Button onPress={removeGhosts} className="w-full mb-3 bg-purple-600">
+                                  <Text className="text-white font-bold">Clear Ghosts</Text>
+                              </Button>
+                              <TouchableOpacity onPress={() => setShowGhostModal(false)} className="py-2">
+                                  <Text className="text-gray-400 font-medium">Keep for now</Text>
+                              </TouchableOpacity>
+                          </View>
+                      </View>
+                    </Modal>
+                  </View>
+                );
+              }

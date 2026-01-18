@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, useWindowDimensions, Platform, Share, ScrollView, Image } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, ScrollView, Image, Platform, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,7 @@ import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
-import { useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { storage } from '@/lib/storage';
 import { generateFleetCode } from '@/lib/utils';
@@ -31,6 +31,7 @@ interface FleetMember {
 
 export default function FleetScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colorScheme } = useColorScheme();
   const { user } = useAuth();
   const { code: inviteCode } = useLocalSearchParams<{ code?: string }>();
@@ -59,38 +60,6 @@ export default function FleetScreen() {
       setMyTrackId(tid);
     })();
   }, []);
-
-  const generateGhosts = (centerLat: number, centerLng: number) => {
-      const newGhosts = Array.from({ length: 3 }).map((_, i) => ({
-          id: `ghost-${i}`,
-          lat: centerLat + (Math.random() - 0.5) * 0.005,
-          lng: centerLng + (Math.random() - 0.5) * 0.005,
-          nickname: `Demo User ${i + 1}`,
-          isGhost: true,
-          battery_level: Math.floor(Math.random() * 100),
-          battery_state: 'unplugged'
-      }));
-      setGhosts(newGhosts);
-  };
-
-  const removeGhosts = async () => {
-      setGhosts([]);
-      setShowGhostModal(false);
-      await storage.setItem('is_demo_mode', 'false');
-  };
-
-  // Ghost Movement Effect
-  useEffect(() => {
-      if (ghosts.length === 0) return;
-      const interval = setInterval(() => {
-          setGhosts(prev => prev.map(g => ({
-              ...g,
-              lat: g.lat + (Math.random() - 0.5) * 0.0005,
-              lng: g.lng + (Math.random() - 0.5) * 0.0005,
-          })));
-      }, 2000);
-      return () => clearInterval(interval);
-  }, [ghosts.length]);
 
   // Password Protection State
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -126,6 +95,38 @@ export default function FleetScreen() {
           removeGhosts();
       }
   }, [members.length]);
+
+  const generateGhosts = (centerLat: number, centerLng: number) => {
+      const newGhosts = Array.from({ length: 3 }).map((_, i) => ({
+          id: `ghost-${i}`,
+          lat: centerLat + (Math.random() - 0.5) * 0.005,
+          lng: centerLng + (Math.random() - 0.5) * 0.005,
+          nickname: `Demo User ${i + 1}`,
+          isGhost: true,
+          battery_level: Math.floor(Math.random() * 100),
+          battery_state: 'unplugged'
+      }));
+      setGhosts(newGhosts);
+  };
+
+  const removeGhosts = async () => {
+      setGhosts([]);
+      setShowGhostModal(false);
+      await storage.setItem('is_demo_mode', 'false');
+  };
+
+  // Ghost Movement Effect
+  useEffect(() => {
+      if (ghosts.length === 0) return;
+      const interval = setInterval(() => {
+          setGhosts(prev => prev.map(g => ({
+              ...g,
+              lat: g.lat + (Math.random() - 0.5) * 0.0005,
+              lng: g.lng + (Math.random() - 0.5) * 0.0005,
+          })));
+      }, 2000);
+      return () => clearInterval(interval);
+  }, [ghosts.length]);
 
   const connectToCircle = async (code: string) => {
       if (!code) return;
@@ -214,6 +215,10 @@ export default function FleetScreen() {
     await storage.setItem('last_fleet_code', newCode);
   };
 
+  const handleJoinMap = () => {
+      router.push({ pathname: '/(tabs)', params: { action: 'start_tracking', code: activeCode || '' } });
+  };
+
   const shareInvite = async () => {
       const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`;
       await Clipboard.setStringAsync(url);
@@ -293,6 +298,14 @@ export default function FleetScreen() {
                     if (m.isGhost) setShowGhostModal(true);
                 }}
             />
+
+            {!myTrackId && (
+                <View className="absolute bottom-48 left-6 right-6 z-20">
+                    <Button onPress={handleJoinMap} className="w-full h-14 rounded-2xl shadow-lg shadow-blue-500/30">
+                        <Text className="text-white font-bold text-xl">Enable Location Services</Text>
+                    </Button>
+                </View>
+            )}
             
             <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
                 <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
