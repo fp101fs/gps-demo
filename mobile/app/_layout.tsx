@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { Text, View, SafeAreaView, Image, Platform } from 'react-native';
 import { Button } from '@/components/ui/Button'; 
@@ -82,6 +82,7 @@ function InitialLayout() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const hasRedirected = useRef(false);
 
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -103,23 +104,31 @@ function InitialLayout() {
     }
   }, [loaded, loading]);
 
-  // Redirect to Fleet as default route when signed in
+  // Redirect to Fleet as default route when signed in (only once per session)
   useEffect(() => {
-    if (!loading && user && segments[0] === '(tabs)') {
+    if (!loading && user && segments[0] === '(tabs)' && !hasRedirected.current) {
       const currentTab = segments[1];
       // If on root tabs or explicitly on index (Home), redirect to Fleet
       if (!currentTab || currentTab === 'index') {
+        hasRedirected.current = true;
         router.replace('/(tabs)/fleet');
       }
     }
   }, [loading, user, segments]);
+
+  // Reset redirect flag when user signs out
+  useEffect(() => {
+    if (!user) {
+      hasRedirected.current = false;
+    }
+  }, [user]);
 
   if (!loaded || loading) {
     return null;
   }
 
   const isSignedIn = !!user;
-  const isPublicRoute = segments[0] === 'track';
+  const isPublicRoute = segments[0] === 'track' || segments[1] === 'fleet';
 
   if (!isSignedIn && !isPublicRoute && segments[0] === '(tabs)') {
       return <SignInScreen />;

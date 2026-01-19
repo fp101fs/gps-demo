@@ -14,6 +14,7 @@ import { storage } from '@/lib/storage';
 import { generateFleetCode } from '@/lib/utils';
 import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
 import * as Location from 'expo-location';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/lib/auth';
 
 interface FleetMember {
@@ -242,6 +243,33 @@ export default function FleetScreen() {
       }
   };
 
+  const handleSignIn = async () => {
+      try {
+          const redirectTo = Platform.OS === 'web'
+              ? window.location.origin
+              : Linking.createURL('/');
+
+          const { data, error } = await supabase.auth.signInWithOAuth({
+              provider: 'google',
+              options: {
+                  queryParams: { access_type: 'offline', prompt: 'consent' },
+                  redirectTo,
+              },
+          });
+
+          if (error) throw error;
+          if (data.url) {
+              if (Platform.OS === 'web') {
+                  window.location.href = data.url;
+              } else {
+                  await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+              }
+          }
+      } catch (err) {
+          console.error('Auth error', err);
+      }
+  };
+
   const shareInvite = async () => {
       const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`;
       await Clipboard.setStringAsync(url);
@@ -332,6 +360,18 @@ export default function FleetScreen() {
                             style={{ shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
                         >
                             <Text className="text-white font-bold text-lg">Enable Location Services</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {locationPermission === 'granted' && !user && (
+                    <View className="absolute inset-0 flex items-center justify-center z-20">
+                        <TouchableOpacity
+                            onPress={handleSignIn}
+                            className="bg-blue-500 px-8 py-4 rounded-full shadow-lg"
+                            style={{ shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+                        >
+                            <Text className="text-white font-bold text-lg">Sign In to Share</Text>
                         </TouchableOpacity>
                     </View>
                 )}
