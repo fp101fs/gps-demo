@@ -23,6 +23,7 @@ export interface FleetMember {
   lat: number;
   lng: number;
   avatarUrl?: string;
+  localAvatar?: number;
   nickname?: string;
   isSos?: boolean;
   lastSeen?: string;
@@ -137,13 +138,26 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                             <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>{member.nickname}</Text>
                         </View>
                     )}
-                    {member.avatarUrl ? (
-                        <View style={{ 
-                            width: member.isSos ? 60 : 40, 
-                            height: member.isSos ? 60 : 40, 
-                            borderRadius: member.isSos ? 30 : 20, 
-                            borderWidth: member.isSos ? 4 : 2, 
-                            borderColor: member.isSos ? '#ef4444' : 'white', 
+                    {member.localAvatar ? (
+                        <View style={{
+                            width: member.isSos ? 60 : 40,
+                            height: member.isSos ? 60 : 40,
+                            borderRadius: member.isSos ? 30 : 20,
+                            borderWidth: member.isSos ? 4 : 2,
+                            borderColor: member.isSos ? '#ef4444' : 'white',
+                            overflow: 'hidden',
+                            backgroundColor: 'white',
+                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000)) ? 0.7 : 1
+                        }}>
+                            <Image source={member.localAvatar} style={{ width: '100%', height: '100%' }} />
+                        </View>
+                    ) : member.avatarUrl ? (
+                        <View style={{
+                            width: member.isSos ? 60 : 40,
+                            height: member.isSos ? 60 : 40,
+                            borderRadius: member.isSos ? 30 : 20,
+                            borderWidth: member.isSos ? 4 : 2,
+                            borderColor: member.isSos ? '#ef4444' : 'white',
                             overflow: 'hidden',
                             backgroundColor: 'white',
                             opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000)) ? 0.7 : 1

@@ -96,6 +96,12 @@ export default function FleetScreen() {
       }
   }, [members.length]);
 
+  const ghostAvatars = [
+      require('@/assets/images/dude.avif'),
+      require('@/assets/images/girl.avif'),
+      require('@/assets/images/car.png'),
+  ];
+
   const generateGhosts = (centerLat: number, centerLng: number) => {
       const newGhosts = Array.from({ length: 3 }).map((_, i) => ({
           id: `ghost-${i}`,
@@ -104,7 +110,8 @@ export default function FleetScreen() {
           nickname: `Demo User ${i + 1}`,
           isGhost: true,
           battery_level: Math.floor(Math.random() * 100),
-          battery_state: 'unplugged'
+          battery_state: 'unplugged',
+          localAvatar: ghostAvatars[i],
       }));
       setGhosts(newGhosts);
   };

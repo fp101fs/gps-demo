@@ -56,7 +56,7 @@ export default function HomeScreen() {
   const [address, setAddress] = useState('Waiting for location...');
   const [pastJourneys, setPastJourneys] = useState<Journey[]>([]);
   const [copied, setCopied] = useState(false);
-  const [useProfileIcon, setUseProfileIcon] = useState(false);
+  const [useProfileIcon, setUseProfileIcon] = useState(true);
   const [fleetCode, setFleetCode] = useState('');
   const [adHocMembers, setAdHocMembers] = useState<{ id: string; lat: number; lng: number; avatarUrl?: string; isSos?: boolean; nickname?: string }[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -309,6 +309,12 @@ export default function HomeScreen() {
     if (data) setPastJourneys(data);
   };
 
+  const ghostAvatars = [
+      require('@/assets/images/dude.avif'),
+      require('@/assets/images/girl.avif'),
+      require('@/assets/images/car.png'),
+  ];
+
   const generateGhosts = (centerLat: number, centerLng: number) => {
       const newGhosts = Array.from({ length: 3 }).map((_, i) => ({
           id: `ghost-${i}`,
@@ -317,7 +323,8 @@ export default function HomeScreen() {
           nickname: `Demo User ${i + 1}`,
           isGhost: true,
           battery_level: Math.floor(Math.random() * 100),
-          battery_state: 'unplugged'
+          battery_state: 'unplugged',
+          localAvatar: ghostAvatars[i],
       }));
       setGhosts(newGhosts);
   };

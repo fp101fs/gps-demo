@@ -29,6 +29,7 @@ export interface FleetMember {
   lat: number;
   lng: number;
   avatarUrl?: string;
+  localAvatar?: number;
   nickname?: string;
   isSos?: boolean;
   lastSeen?: string;
@@ -72,29 +73,29 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   };
 
   // Helper to create the correct icon with nickname label and last seen
-  const createIcon = (url?: string, label?: string, memberIsSos?: boolean, lastSeen?: string) => {
+  const createIcon = (url?: string, label?: string, memberIsSos?: boolean, lastSeen?: string, localAvatar?: number) => {
     if (!L) return null;
     const size = memberIsSos ? 80 : 40;
     const radius = size / 2;
     const border = memberIsSos ? '4px solid #ef4444' : '2px solid white';
     const shadow = memberIsSos ? '0 0 20px #ef4444' : '0 2px 5px rgba(0,0,0,0.3)';
     const animationClass = memberIsSos ? 'marker-pulse-sos' : 'marker-pulse';
-    
+
     const relativeTime = getRelativeTime(lastSeen);
     const isStale = lastSeen && (Date.now() - new Date(lastSeen).getTime() > 60000); // More than 1 min
 
     const labelHtml = label ? `
       <div style="
-        position: absolute; 
-        top: -25px; 
-        left: 50%; 
-        transform: translateX(-50%); 
-        background-color: ${memberIsSos ? '#ef4444' : 'rgba(0,0,0,0.7)'}; 
-        color: white; 
-        padding: 2px 8px; 
-        border-radius: 10px; 
-        font-size: 10px; 
-        font-weight: bold; 
+        position: absolute;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: ${memberIsSos ? '#ef4444' : 'rgba(0,0,0,0.7)'};
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
         white-space: nowrap;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       ">
@@ -102,7 +103,11 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       </div>
     ` : '';
 
-    const imgHtml = url ? `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<img src="${Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri}" style="width: 100%; height: 100%; object-fit: contain; padding: 5px;" />`;
+    let imgUrl = url;
+    if (!imgUrl && localAvatar) {
+      imgUrl = Asset.fromModule(localAvatar).uri;
+    }
+    const imgHtml = imgUrl ? `<img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<img src="${Asset.fromModule(require('../assets/images/marker-green-cross.png')).uri}" style="width: 100%; height: 100%; object-fit: contain; padding: 5px;" />`;
 
     return L.divIcon({
       className: animationClass,
@@ -110,10 +115,10 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         <div style="position: relative; width: ${size}px; height: ${size}px;">
           ${labelHtml}
           <div style="
-            width: ${size}px; 
-            height: ${size}px; 
-            border-radius: ${radius}px; 
-            border: ${border}; 
+            width: ${size}px;
+            height: ${size}px;
+            border-radius: ${radius}px;
+            border: ${border};
             box-shadow: ${shadow};
             overflow: hidden;
             background-color: white;
@@ -242,7 +247,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
     const latLngs: [number, number][] = [];
     fleetMembers.forEach(member => {
         latLngs.push([member.lat, member.lng]);
-        const icon = createIcon(member.avatarUrl, member.nickname, member.isSos, member.lastSeen);
+        const icon = createIcon(member.avatarUrl, member.nickname, member.isSos, member.lastSeen, member.localAvatar);
         if (fleetMarkersRef.current[member.id]) {
             fleetMarkersRef.current[member.id].setLatLng([member.lat, member.lng]);
             if (icon) fleetMarkersRef.current[member.id].setIcon(icon);
