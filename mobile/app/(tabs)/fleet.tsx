@@ -29,6 +29,9 @@ interface FleetMember {
   battery_state?: string;
 }
 
+// Default location (San Francisco) for showing ghosts before user enables location
+const DEFAULT_LOCATION = { lat: 37.7749, lng: -122.4194 };
+
 export default function FleetScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -48,13 +51,21 @@ export default function FleetScreen() {
   // Ghost / Demo State
   const [ghosts, setGhosts] = useState<any[]>([]);
   const [showGhostModal, setShowGhostModal] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
 
   useEffect(() => {
     (async () => {
+      // Generate ghosts at default location immediately
+      generateGhosts(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
+
+      // Check location permission
       const { status } = await Location.getForegroundPermissionsAsync();
+      setLocationPermission(status);
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
         setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        // Reposition ghosts around user's actual location
+        generateGhosts(loc.coords.latitude, loc.coords.longitude);
       }
       const tid = await storage.getItem('current_track_id');
       setMyTrackId(tid);
@@ -72,18 +83,10 @@ export default function FleetScreen() {
     const init = async () => {
         const saved = await storage.getItem('last_fleet_code');
         const initialCode = inviteCode || saved;
-        
+
         if (initialCode) {
             setFleetCode(initialCode);
             connectToCircle(initialCode);
-        }
-
-        // Check for Demo Mode start
-        const isDemo = await storage.getItem('is_demo_mode');
-        if (isDemo === 'true') {
-             // We need location to spawn ghosts. 
-             const loc = await Location.getCurrentPositionAsync({});
-             generateGhosts(loc.coords.latitude, loc.coords.longitude);
         }
     };
     init();
@@ -226,6 +229,19 @@ export default function FleetScreen() {
       router.push({ pathname: '/(tabs)', params: { action: 'start_tracking', code: activeCode || '' } });
   };
 
+  const handleEnableLocation = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status);
+      if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+          // Reposition ghosts around user's actual location
+          generateGhosts(loc.coords.latitude, loc.coords.longitude);
+      } else {
+          Alert.alert('Permission Required', 'Location access is needed to show your position on the map.');
+      }
+  };
+
   const shareInvite = async () => {
       const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`;
       await Clipboard.setStringAsync(url);
@@ -296,20 +312,35 @@ export default function FleetScreen() {
                      </View>
                  )}
             </View>
-            <Map 
-                points={[]} 
-                fleetMembers={[...members, ...ghosts]} 
-                theme={colorScheme as 'light' | 'dark'} 
-                currentPoint={currentLocation ? { ...currentLocation, timestamp: Date.now() } : undefined} 
-                onMemberSelect={(m) => {
-                    if (m.isGhost) setShowGhostModal(true);
-                }}
-            />
+            <View className="flex-1 relative">
+                <Map
+                    points={[]}
+                    fleetMembers={[...members, ...ghosts]}
+                    theme={colorScheme as 'light' | 'dark'}
+                    currentPoint={currentLocation ? { ...currentLocation, timestamp: Date.now() } : undefined}
+                    avatarUrl={user?.user_metadata?.avatar_url}
+                    onMemberSelect={(m) => {
+                        if (m.isGhost) setShowGhostModal(true);
+                    }}
+                />
 
-            {!myTrackId && (
+                {locationPermission !== 'granted' && (
+                    <View className="absolute inset-0 flex items-center justify-center z-20">
+                        <TouchableOpacity
+                            onPress={handleEnableLocation}
+                            className="bg-blue-500 px-8 py-4 rounded-full shadow-lg"
+                            style={{ shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+                        >
+                            <Text className="text-white font-bold text-lg">Enable Location Services</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
+
+            {locationPermission === 'granted' && !myTrackId && (
                 <View className="absolute bottom-48 left-6 right-6 z-20">
                     <Button onPress={handleJoinMap} className="w-full h-14 rounded-2xl shadow-lg shadow-blue-500/30">
-                        <Text className="text-white font-bold text-xl">Enable Location Services</Text>
+                        <Text className="text-white font-bold text-xl">Start Sharing Location</Text>
                     </Button>
                 </View>
             )}

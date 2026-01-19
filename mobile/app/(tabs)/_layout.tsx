@@ -27,25 +27,25 @@ export default function TabLayout() {
         headerShown: useClientOnlyValue(false, true),
       }}>
       <Tabs.Screen
-        name="index"
+        name="fleet"
         options={{
-          title: 'Home',
+          title: 'Family',
           headerTitle: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Image 
-                source={require('../../assets/images/favicon.png')} 
-                style={{ width: 24, height: 24, marginRight: 8, borderRadius: 4 }} 
+              <Image
+                source={require('../../assets/images/favicon.png')}
+                style={{ width: 24, height: 24, marginRight: 8, borderRadius: 4 }}
               />
-              <Text style={{ 
-                fontSize: 18, 
-                fontWeight: 'bold', 
-                color: colorScheme === 'dark' ? 'white' : 'black' 
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: colorScheme === 'dark' ? 'white' : 'black'
               }}>
                 location.tools
               </Text>
             </View>
           ),
-          tabBarIcon: ({ color }) => <TabBarIcon name="map-marker" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
               <Pressable>
@@ -63,10 +63,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="fleet"
+        name="index"
         options={{
-          title: 'Family',
-          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color }) => <TabBarIcon name="map-marker" color={color} />,
         }}
       />
       <Tabs.Screen
