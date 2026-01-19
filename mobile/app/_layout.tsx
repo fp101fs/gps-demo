@@ -128,7 +128,8 @@ function InitialLayout() {
   }
 
   const isSignedIn = !!user;
-  const isPublicRoute = segments[0] === 'track' || segments[0] === '(tabs)';
+  // Allow public access to: track routes, tabs, and initial load (empty segments)
+  const isPublicRoute = segments[0] === 'track' || segments[0] === '(tabs)' || segments.length === 0;
 
   if (!isSignedIn && !isPublicRoute) {
       return <SignInScreen />;
