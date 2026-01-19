@@ -361,7 +361,7 @@ export default function FleetScreen() {
                 )}
             </View>
 
-            {locationPermission === 'granted' && !myTrackId && (
+            {locationPermission === 'granted' && user && !myTrackId && (
                 <View className="absolute bottom-48 left-6 right-6 z-20">
                     <Button onPress={handleJoinMap} className="w-full h-14 rounded-2xl shadow-lg shadow-blue-500/30">
                         <Text className="text-white font-bold text-xl">Start Sharing Location</Text>

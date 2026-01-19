@@ -104,9 +104,9 @@ function InitialLayout() {
     }
   }, [loaded, loading]);
 
-  // Redirect to Fleet as default route when signed in (only once per session)
+  // Redirect to Fleet as default route (for both signed-in and anonymous users)
   useEffect(() => {
-    if (!loading && user && segments[0] === '(tabs)' && !hasRedirected.current) {
+    if (!loading && segments[0] === '(tabs)' && !hasRedirected.current) {
       const currentTab = segments[1];
       // If on root tabs or explicitly on index (Home), redirect to Fleet
       if (!currentTab || currentTab === 'index') {
@@ -114,7 +114,7 @@ function InitialLayout() {
         router.replace('/(tabs)/fleet');
       }
     }
-  }, [loading, user, segments]);
+  }, [loading, segments]);
 
   // Reset redirect flag when user signs out
   useEffect(() => {
