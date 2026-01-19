@@ -128,9 +128,9 @@ function InitialLayout() {
   }
 
   const isSignedIn = !!user;
-  const isPublicRoute = segments[0] === 'track' || segments[1] === 'fleet';
+  const isPublicRoute = segments[0] === 'track' || segments[0] === '(tabs)';
 
-  if (!isSignedIn && !isPublicRoute && segments[0] === '(tabs)') {
+  if (!isSignedIn && !isPublicRoute) {
       return <SignInScreen />;
   }
 
