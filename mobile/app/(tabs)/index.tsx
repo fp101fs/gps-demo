@@ -556,7 +556,7 @@ export default function HomeScreen() {
                         </Button>
                     </View>
                 )}
-                {user && <Button variant="ghost" size="sm" onPress={() => signOut()}><Text className="text-blue-600 dark:text-blue-400">Sign Out</Text></Button>}
+                {user && <Button variant="ghost" size="sm" onPress={async () => { await signOut(); router.replace('/'); }}><Text className="text-blue-600 dark:text-blue-400">Sign Out</Text></Button>}
               </View>
             </View>
 

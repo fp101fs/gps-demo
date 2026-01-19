@@ -103,6 +103,17 @@ function InitialLayout() {
     }
   }, [loaded, loading]);
 
+  // Redirect to Fleet as default route when signed in
+  useEffect(() => {
+    if (!loading && user && segments[0] === '(tabs)') {
+      const currentTab = segments[1];
+      // If on root tabs or explicitly on index (Home), redirect to Fleet
+      if (!currentTab || currentTab === 'index') {
+        router.replace('/(tabs)/fleet');
+      }
+    }
+  }, [loading, user, segments]);
+
   if (!loaded || loading) {
     return null;
   }
