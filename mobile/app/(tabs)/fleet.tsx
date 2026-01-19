@@ -300,46 +300,30 @@ export default function FleetScreen() {
 
   return (
     <View className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
-      {loading && !activeCode && <View className="flex-1 items-center justify-center"><ActivityIndicator color="#2563eb" /></View>}
-      {!activeCode && !loading ? (
-        <View className="flex-1 p-4 justify-center items-center">
-             <View style={{ width: '100%', maxWidth: 400 }}>
-                <Text className="text-2xl font-bold mb-2 text-black dark:text-white">Join Family Circle</Text>
-                <Text className="text-gray-500 dark:text-gray-400 mb-6">Enter your family code to see everyone on the map.</Text>
-                <TextInput value={fleetCode} onChangeText={setFleetCode} placeholder="Enter Family Code" placeholderTextColor="#9ca3af" className="bg-gray-100 dark:bg-gray-800 dark:text-white p-4 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 text-lg" autoCapitalize="none" />
-                <Button onPress={() => connectToCircle(fleetCode)} className="w-full mb-4"><Text className="text-white font-bold">Connect to Family</Text></Button>
-                
-                <View className="flex-row items-center gap-4 mb-4">
-                    <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-800" />
-                    <Text className="text-gray-400 font-medium">OR</Text>
-                    <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-800" />
-                </View>
-
-                <Button onPress={handleCreateFleet} variant="secondary" className="w-full bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900"><Text className="text-blue-600 dark:text-blue-400 font-bold">Create New Circle</Text></Button>
-             </View>
-        </View>
-      ) : activeCode && (
-        <View className="flex-1">
-            <View className="absolute top-12 left-4 right-4 z-10 gap-2 items-center">
-                 <View className="flex-row gap-2 w-full max-w-2xl">
-                    <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
-                        <View className="flex-row justify-between items-center">
-                            <View><Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text><Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text></View>
-                            <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg"><Ionicons name="person-add" size={20} color="#2563eb" /></TouchableOpacity>
+      {loading && <View className="absolute inset-0 items-center justify-center z-50"><ActivityIndicator color="#2563eb" /></View>}
+      <View className="flex-1">
+            {activeCode && (
+                <View className="absolute top-12 left-4 right-4 z-10 gap-2 items-center">
+                     <View className="flex-row gap-2 w-full max-w-2xl">
+                        <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
+                            <View className="flex-row justify-between items-center">
+                                <View><Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text><Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text></View>
+                                <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg"><Ionicons name="person-add" size={20} color="#2563eb" /></TouchableOpacity>
+                            </View>
+                            <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
                         </View>
-                        <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
-                    </View>
-                    <Button variant="destructive" className="h-full px-4" onPress={handleExit}>
-                        <Ionicons name="exit-outline" size={20} color="white" />
-                    </Button>
-                 </View>
-                 {sosMembers.length > 0 && (
-                     <View className="w-full max-w-2xl bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
-                         <Ionicons name="warning" size={28} color="white" />
-                         <View className="flex-1"><Text className="text-white font-black text-lg uppercase">Emergency SOS!</Text><Text className="text-white font-medium text-xs">{sosMembers.length} family member{sosMembers.length > 1 ? 's' : ''} triggered an alert!</Text></View>
+                        <Button variant="destructive" className="h-full px-4" onPress={handleExit}>
+                            <Ionicons name="exit-outline" size={20} color="white" />
+                        </Button>
                      </View>
-                 )}
-            </View>
+                     {sosMembers.length > 0 && (
+                         <View className="w-full max-w-2xl bg-red-600 p-4 rounded-xl shadow-lg flex-row items-center gap-3 animate-pulse">
+                             <Ionicons name="warning" size={28} color="white" />
+                             <View className="flex-1"><Text className="text-white font-black text-lg uppercase">Emergency SOS!</Text><Text className="text-white font-medium text-xs">{sosMembers.length} family member{sosMembers.length > 1 ? 's' : ''} triggered an alert!</Text></View>
+                         </View>
+                     )}
+                </View>
+            )}
             <View className="flex-1 relative">
                 <Map
                     points={[]}
@@ -385,32 +369,33 @@ export default function FleetScreen() {
                 </View>
             )}
             
-            <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
-                <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
-                <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3 px-2">Family Members ({members.length})</Text>
-                <ScrollView>
-                    {members.map(member => (
-                        <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                            <View className="relative">
-                                {member.avatarUrl ? (
-                                    <Image source={{ uri: member.avatarUrl }} className="w-10 h-10 rounded-full" />
-                                ) : (
-                                    <Image source={require('@/assets/images/marker-green-cross.png')} className="w-10 h-10" resizeMode="contain" />
-                                )}
-                                {member.isSos && <View className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white"><Ionicons name="warning" size={10} color="white" /></View>}
-                            </View>
-                            <View className="flex-1 ml-3">
-                                <View className="flex-row items-center gap-1">
-                                    <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
-                                    {myTrackId === member.id ? (
-                                        <Text className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded">(This Device)</Text>
+            {activeCode && (
+                <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
+                    <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
+                    <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3 px-2">Family Members ({members.length})</Text>
+                    <ScrollView>
+                        {members.map(member => (
+                            <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                                <View className="relative">
+                                    {member.avatarUrl ? (
+                                        <Image source={{ uri: member.avatarUrl }} className="w-10 h-10 rounded-full" />
                                     ) : (
-                                        user && member.user_id === user.id && <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">(You)</Text>
+                                        <Image source={require('@/assets/images/marker-green-cross.png')} className="w-10 h-10" resizeMode="contain" />
                                     )}
+                                    {member.isSos && <View className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white"><Ionicons name="warning" size={10} color="white" /></View>}
                                 </View>
-                                <View className="flex-row items-center gap-2">
-                                    {member.lastSeen && <Text className="text-xs text-gray-500">{new Date(member.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
-                                    {currentLocation && <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">• {formatDistance(calculateDistance(currentLocation, member))}</Text>}
+                                <View className="flex-1 ml-3">
+                                    <View className="flex-row items-center gap-1">
+                                        <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
+                                        {myTrackId === member.id ? (
+                                            <Text className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded">(This Device)</Text>
+                                        ) : (
+                                            user && member.user_id === user.id && <Text className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">(You)</Text>
+                                        )}
+                                    </View>
+                                    <View className="flex-row items-center gap-2">
+                                        {member.lastSeen && <Text className="text-xs text-gray-500">{new Date(member.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
+                                        {currentLocation && <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">• {formatDistance(calculateDistance(currentLocation, member))}</Text>}
                                 </View>
                             </View>
                             {member.battery_level !== undefined && (
@@ -429,10 +414,10 @@ export default function FleetScreen() {
                         </View>
                     ))}
                     {members.length === 0 && <Text className="text-center text-gray-500 py-4">Waiting for family to join...</Text>}
-                </ScrollView>
-            </View>
+                    </ScrollView>
+                </View>
+            )}
         </View>
-      )}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
           <View className="flex-1 justify-center items-center bg-black/50 p-6">
               <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">

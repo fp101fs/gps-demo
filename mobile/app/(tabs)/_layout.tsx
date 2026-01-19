@@ -65,6 +65,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          href: null,  // Hide from tab bar - Fleet is the main view
           title: 'Home',
           tabBarIcon: ({ color }) => <TabBarIcon name="map-marker" color={color} />,
         }}
