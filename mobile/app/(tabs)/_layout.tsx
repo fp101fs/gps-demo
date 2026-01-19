@@ -27,7 +27,7 @@ export default function TabLayout() {
         headerShown: useClientOnlyValue(false, true),
       }}>
       <Tabs.Screen
-        name="fleet"
+        name="index"
         options={{
           title: 'Family',
           headerTitle: () => (
@@ -63,9 +63,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
-          href: null,  // Hide from tab bar - Fleet is the main view
+          href: null,  // Hide from tab bar - Fleet (index) is the main view
           title: 'Home',
           tabBarIcon: ({ color }) => <TabBarIcon name="map-marker" color={color} />,
         }}

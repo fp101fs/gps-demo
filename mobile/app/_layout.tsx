@@ -1,9 +1,9 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, useSegments, useRouter } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { Text, View, SafeAreaView, Image, Platform } from 'react-native';
 import { Button } from '@/components/ui/Button'; 
@@ -81,8 +81,6 @@ function InitialLayout() {
   const { colorScheme } = useColorScheme();
   const { user, loading } = useAuth();
   const segments = useSegments();
-  const router = useRouter();
-  const hasRedirected = useRef(false);
 
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -103,25 +101,6 @@ function InitialLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded, loading]);
-
-  // Redirect to Fleet as default route (for both signed-in and anonymous users)
-  useEffect(() => {
-    if (!loading && segments[0] === '(tabs)' && !hasRedirected.current) {
-      const currentTab = segments[1];
-      // If on root tabs or explicitly on index (Home), redirect to Fleet
-      if (!currentTab || currentTab === 'index') {
-        hasRedirected.current = true;
-        router.replace('/(tabs)/fleet');
-      }
-    }
-  }, [loading, segments]);
-
-  // Reset redirect flag when user signs out
-  useEffect(() => {
-    if (!user) {
-      hasRedirected.current = false;
-    }
-  }, [user]);
 
   if (!loaded || loading) {
     return null;
