@@ -482,7 +482,7 @@ export default function FleetScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                )
+                )}
 
                 {locationPermission !== 'granted' && (
                     <View className="absolute inset-0 flex items-center justify-center z-20">
