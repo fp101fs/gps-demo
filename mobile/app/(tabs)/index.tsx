@@ -290,16 +290,16 @@ export default function FleetScreen() {
       );
   };
 
-  const startAnonymousSharing = async (location: { lat: number, lng: number }) => {
-      // Generate anonymous ID and fleet code
+  const startAnonymousSharing = async (location: { lat: number, lng: number }, existingCode?: string | null) => {
+      // Generate anonymous ID; use existing fleet code if joining, otherwise generate new
       const anonId = generateAnonymousId();
-      const newCode = generateFleetCode();
+      const codeToUse = existingCode || generateFleetCode();
 
       // Create track in Supabase with anonymous user_id
       const { data: track, error } = await supabase.from('tracks').insert([{
           is_active: true,
           user_id: anonId,
-          party_code: newCode,
+          party_code: codeToUse,
           lat: location.lat,
           lng: location.lng,
           nickname: 'Anonymous',
@@ -315,12 +315,15 @@ export default function FleetScreen() {
 
       // Store locally
       await storage.setItem('current_track_id', track.id);
-      await storage.setItem('last_fleet_code', newCode);
+      await storage.setItem('last_fleet_code', codeToUse);
 
       // Update UI state
       setMyTrackId(track.id);
-      setFleetCode(newCode);
-      setActiveCode(newCode);
+      // Only update fleet/activeCode if we generated a new code (not joining existing)
+      if (!existingCode) {
+          setFleetCode(codeToUse);
+          setActiveCode(codeToUse);
+      }
 
       // Start location watching
       startLocationWatching(track.id);
@@ -336,10 +339,8 @@ export default function FleetScreen() {
           // Reposition ghosts around user's actual location
           generateGhosts(location.lat, location.lng);
 
-          // Auto-start anonymous sharing if not signed in
-          if (!user) {
-              await startAnonymousSharing(location);
-          }
+          // Auto-start sharing for ALL users (pass activeCode if joining existing fleet)
+          await startAnonymousSharing(location, activeCode);
       } else {
           Alert.alert('Permission Required', 'Location access is needed to show your position on the map.');
       }
@@ -452,14 +453,6 @@ export default function FleetScreen() {
 
             </View>
 
-            {locationPermission === 'granted' && user && !myTrackId && (
-                <View className="absolute bottom-48 left-6 right-6 z-20">
-                    <Button onPress={handleJoinMap} className="w-full h-14 rounded-2xl shadow-lg shadow-blue-500/30">
-                        <Text className="text-white font-bold text-xl">Start Sharing Location</Text>
-                    </Button>
-                </View>
-            )}
-            
             {activeCode && (
                 <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
                     <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
