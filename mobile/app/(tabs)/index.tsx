@@ -15,6 +15,7 @@ import { generateFleetCode } from '@/lib/utils';
 import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
 import * as Location from 'expo-location';
 import * as WebBrowser from 'expo-web-browser';
+import * as Battery from 'expo-battery';
 import { useAuth } from '@/lib/auth';
 
 interface FleetMember {
@@ -278,10 +279,24 @@ export default function FleetScreen() {
               const newLng = loc.coords.longitude;
               setCurrentLocation({ lat: newLat, lng: newLng });
 
-              // Update track position in Supabase
+              // Get current battery status
+              let batteryLevel: number | null = null;
+              let batteryState: string | null = null;
+              try {
+                  const level = await Battery.getBatteryLevelAsync();
+                  batteryLevel = Math.round(level * 100);
+                  const state = await Battery.getBatteryStateAsync();
+                  batteryState = state === Battery.BatteryState.CHARGING ? 'charging' :
+                                (state === Battery.BatteryState.FULL ? 'full' :
+                                (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
+              } catch (e) {}
+
+              // Update track position and battery in Supabase
               await supabase.from('tracks').update({
                   lat: newLat,
-                  lng: newLng
+                  lng: newLng,
+                  battery_level: batteryLevel,
+                  battery_state: batteryState,
               }).eq('id', trackId);
 
               // Also insert point for history
@@ -300,6 +315,20 @@ export default function FleetScreen() {
       const anonId = generateAnonymousId();
       const codeToUse = existingCode || generateFleetCode();
 
+      // Capture battery data
+      let batteryLevel: number | null = null;
+      let batteryState: string | null = null;
+      try {
+          const level = await Battery.getBatteryLevelAsync();
+          batteryLevel = Math.round(level * 100);
+          const state = await Battery.getBatteryStateAsync();
+          batteryState = state === Battery.BatteryState.CHARGING ? 'charging' :
+                        (state === Battery.BatteryState.FULL ? 'full' :
+                        (state === Battery.BatteryState.UNPLUGGED ? 'unplugged' : 'unknown'));
+      } catch (e) {
+          console.log('Battery info not available');
+      }
+
       // Create track in Supabase with anonymous user_id
       const { data: track, error } = await supabase.from('tracks').insert([{
           is_active: true,
@@ -310,6 +339,8 @@ export default function FleetScreen() {
           nickname: 'Anonymous',
           expires_at: new Date(Date.now() + 60 * 60000).toISOString(), // 1 hour default
           share_type: 'live',
+          battery_level: batteryLevel,
+          battery_state: batteryState,
       }]).select().single();
 
       if (error) {
@@ -413,12 +444,14 @@ export default function FleetScreen() {
             {activeCode && (
                 <View className="absolute top-12 left-16 right-4 z-10 gap-2 items-center">
                      <View className="flex-row gap-2 w-full max-w-2xl">
-                        <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
+                        <View className="flex-1 bg-white/90 dark:bg-black/80 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
                             <View className="flex-row justify-between items-center">
-                                <View><Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text><Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text></View>
+                                <View>
+                                    <Text className="text-3xl font-black text-black dark:text-white">#{activeCode}</Text>
+                                    <Text className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
+                                </View>
                                 <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg"><Ionicons name="person-add" size={40} color="#2563eb" /></TouchableOpacity>
                             </View>
-                            <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
                         </View>
                         <Button variant="destructive" className="h-full px-4" onPress={handleExit}>
                             <Ionicons name="exit-outline" size={20} color="white" />
@@ -448,41 +481,6 @@ export default function FleetScreen() {
                         }
                     }}
                 />
-
-                {/* Zoom To Toast */}
-                {selectedMember && (
-                    <View className="absolute bottom-4 left-4 right-4 z-30 flex-row items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                        <View className="flex-row items-center gap-3">
-                            {selectedMember.avatarUrl ? (
-                                <Image source={{ uri: selectedMember.avatarUrl }} style={{ width: 32, height: 32, borderRadius: 16 }} />
-                            ) : (
-                                <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center">
-                                    <Ionicons name="person" size={18} color="#2563eb" />
-                                </View>
-                            )}
-                            <Text className="font-bold text-gray-900 dark:text-white">{selectedMember.nickname || 'Family Member'}</Text>
-                        </View>
-                        <View className="flex-row gap-2">
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setZoomTarget({ lat: selectedMember.lat, lng: selectedMember.lng });
-                                    setSelectedMember(null);
-                                    // Clear zoom target after a short delay so it can be triggered again
-                                    setTimeout(() => setZoomTarget(null), 500);
-                                }}
-                                className="bg-blue-500 px-4 py-2 rounded-lg"
-                            >
-                                <Text className="text-white font-bold">Zoom To</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setSelectedMember(null)}
-                                className="bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-lg"
-                            >
-                                <Ionicons name="close" size={18} color="#6b7280" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
 
                 {locationPermission !== 'granted' && (
                     <View className="absolute inset-0 flex items-center justify-center z-20">
@@ -551,6 +549,40 @@ export default function FleetScreen() {
                     {members.length === 0 && <Text className="text-center text-gray-500 py-4">Waiting for family to join...</Text>}
                     </ScrollView>
                     )}
+                </View>
+            )}
+
+            {/* Zoom To Toast - positioned above members panel */}
+            {selectedMember && (
+                <View className="absolute bottom-[45%] left-4 right-4 z-50 flex-row items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                    <View className="flex-row items-center gap-3">
+                        {selectedMember.avatarUrl ? (
+                            <Image source={{ uri: selectedMember.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                        ) : (
+                            <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center">
+                                <Ionicons name="person" size={24} color="#2563eb" />
+                            </View>
+                        )}
+                        <Text className="font-bold text-gray-900 dark:text-white text-lg">{selectedMember.nickname || 'Family Member'}</Text>
+                    </View>
+                    <View className="flex-row gap-2">
+                        <TouchableOpacity
+                            onPress={() => {
+                                setZoomTarget({ lat: selectedMember.lat, lng: selectedMember.lng });
+                                setSelectedMember(null);
+                                setTimeout(() => setZoomTarget(null), 500);
+                            }}
+                            className="bg-blue-500 px-5 py-3 rounded-lg"
+                        >
+                            <Text className="text-white font-bold text-base">Zoom To</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setSelectedMember(null)}
+                            className="bg-gray-200 dark:bg-gray-700 px-4 py-3 rounded-lg"
+                        >
+                            <Ionicons name="close" size={20} color="#6b7280" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
         </View>
