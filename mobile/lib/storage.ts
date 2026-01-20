@@ -39,3 +39,12 @@ export const storage = {
     } catch (e) {}
   }
 };
+
+export function generateAnonymousId(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let randomPart = '';
+  for (let i = 0; i < 8; i++) {
+    randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `anon_${randomPart}_${Date.now()}`;
+}

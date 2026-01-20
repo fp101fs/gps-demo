@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, ScrollView, Image, Platform, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
-import { storage } from '@/lib/storage';
+import { storage, generateAnonymousId } from '@/lib/storage';
 import { generateFleetCode } from '@/lib/utils';
 import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
 import * as Location from 'expo-location';
@@ -54,10 +54,21 @@ export default function FleetScreen() {
   const [showGhostModal, setShowGhostModal] = useState(false);
   const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
 
+  // Location watching ref for anonymous sharing
+  const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+
   useEffect(() => {
     (async () => {
       // Generate ghosts at default location immediately
       generateGhosts(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng);
+
+      // Show demo Circle Active overlay immediately for first-time visitors
+      const saved = await storage.getItem('last_fleet_code');
+      if (!saved && !inviteCode) {
+        const demoCode = generateFleetCode();
+        setFleetCode(demoCode);
+        setActiveCode(demoCode);
+      }
 
       // Check location permission
       const { status } = await Location.getForegroundPermissionsAsync();
@@ -71,6 +82,16 @@ export default function FleetScreen() {
       const tid = await storage.getItem('current_track_id');
       setMyTrackId(tid);
     })();
+  }, []);
+
+  // Cleanup on unmount - stop location watching
+  useEffect(() => {
+    return () => {
+      if (locationWatchRef.current) {
+        locationWatchRef.current.remove();
+        locationWatchRef.current = null;
+      }
+    };
   }, []);
 
   // Password Protection State
@@ -214,9 +235,23 @@ export default function FleetScreen() {
   }, [activeCode]);
 
   const handleExit = async () => {
+      // Stop location watching if active
+      if (locationWatchRef.current) {
+          locationWatchRef.current.remove();
+          locationWatchRef.current = null;
+      }
+
+      // Deactivate track in Supabase
+      if (myTrackId) {
+          await supabase.from('tracks').update({ is_active: false }).eq('id', myTrackId);
+      }
+
+      // Clear local state
       setActiveCode(null);
       setMembers([]);
+      setMyTrackId(null);
       await storage.removeItem('last_fleet_code');
+      await storage.removeItem('current_track_id');
   };
 
   const handleCreateFleet = async () => {
@@ -230,14 +265,81 @@ export default function FleetScreen() {
       router.push({ pathname: '/(tabs)', params: { action: 'start_tracking', code: activeCode || '' } });
   };
 
+  const startLocationWatching = async (trackId: string) => {
+      locationWatchRef.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+          async (loc) => {
+              const newLat = loc.coords.latitude;
+              const newLng = loc.coords.longitude;
+              setCurrentLocation({ lat: newLat, lng: newLng });
+
+              // Update track position in Supabase
+              await supabase.from('tracks').update({
+                  lat: newLat,
+                  lng: newLng
+              }).eq('id', trackId);
+
+              // Also insert point for history
+              await supabase.from('points').insert([{
+                  track_id: trackId,
+                  lat: newLat,
+                  lng: newLng,
+                  timestamp: new Date().toISOString()
+              }]);
+          }
+      );
+  };
+
+  const startAnonymousSharing = async (location: { lat: number, lng: number }) => {
+      // Generate anonymous ID and fleet code
+      const anonId = generateAnonymousId();
+      const newCode = generateFleetCode();
+
+      // Create track in Supabase with anonymous user_id
+      const { data: track, error } = await supabase.from('tracks').insert([{
+          is_active: true,
+          user_id: anonId,
+          party_code: newCode,
+          lat: location.lat,
+          lng: location.lng,
+          nickname: 'Anonymous',
+          expires_at: new Date(Date.now() + 60 * 60000).toISOString(), // 1 hour default
+          share_type: 'live',
+      }]).select().single();
+
+      if (error) {
+          Alert.alert('Error', 'Could not start sharing.');
+          console.error('Track creation error:', error);
+          return;
+      }
+
+      // Store locally
+      await storage.setItem('current_track_id', track.id);
+      await storage.setItem('last_fleet_code', newCode);
+
+      // Update UI state
+      setMyTrackId(track.id);
+      setFleetCode(newCode);
+      setActiveCode(newCode);
+
+      // Start location watching
+      startLocationWatching(track.id);
+  };
+
   const handleEnableLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status);
       if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({});
-          setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+          const location = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          setCurrentLocation(location);
           // Reposition ghosts around user's actual location
-          generateGhosts(loc.coords.latitude, loc.coords.longitude);
+          generateGhosts(location.lat, location.lng);
+
+          // Auto-start anonymous sharing if not signed in
+          if (!user) {
+              await startAnonymousSharing(location);
+          }
       } else {
           Alert.alert('Permission Required', 'Location access is needed to show your position on the map.');
       }
@@ -348,17 +450,6 @@ export default function FleetScreen() {
                     </View>
                 )}
 
-                {locationPermission === 'granted' && !user && (
-                    <View className="absolute inset-0 flex items-center justify-center z-20">
-                        <TouchableOpacity
-                            onPress={handleSignIn}
-                            className="bg-blue-500 px-8 py-4 rounded-full shadow-lg"
-                            style={{ shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-                        >
-                            <Text className="text-white font-bold text-lg">Sign In to Share</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
             </View>
 
             {locationPermission === 'granted' && user && !myTrackId && (
