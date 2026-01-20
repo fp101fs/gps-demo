@@ -54,6 +54,11 @@ export default function FleetScreen() {
   const [showGhostModal, setShowGhostModal] = useState(false);
   const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
 
+  // UI State
+  const [isMembersPanelCollapsed, setIsMembersPanelCollapsed] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<FleetMember | null>(null);
+  const [zoomTarget, setZoomTarget] = useState<{ lat: number; lng: number } | null>(null);
+
   // Location watching ref for anonymous sharing
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
 
@@ -406,12 +411,12 @@ export default function FleetScreen() {
       {loading && <View className="absolute inset-0 items-center justify-center z-50"><ActivityIndicator color="#2563eb" /></View>}
       <View className="flex-1">
             {activeCode && (
-                <View className="absolute top-12 left-4 right-4 z-10 gap-2 items-center">
+                <View className="absolute top-12 left-16 right-4 z-10 gap-2 items-center">
                      <View className="flex-row gap-2 w-full max-w-2xl">
                         <View className="flex-1 bg-white/90 dark:bg-black/80 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm backdrop-blur-md">
                             <View className="flex-row justify-between items-center">
                                 <View><Text className="text-xs font-bold text-gray-500 uppercase">Circle Active</Text><Text className="text-lg font-bold text-black dark:text-white">#{activeCode}</Text></View>
-                                <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-lg"><Ionicons name="person-add" size={20} color="#2563eb" /></TouchableOpacity>
+                                <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg"><Ionicons name="person-add" size={40} color="#2563eb" /></TouchableOpacity>
                             </View>
                             <Text className="text-xs text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
                         </View>
@@ -434,10 +439,50 @@ export default function FleetScreen() {
                     theme={colorScheme as 'light' | 'dark'}
                     currentPoint={currentLocation ? { ...currentLocation, timestamp: Date.now() } : undefined}
                     avatarUrl={user?.user_metadata?.avatar_url}
+                    zoomTarget={zoomTarget}
                     onMemberSelect={(m) => {
-                        if (m.isGhost) setShowGhostModal(true);
+                        if (m.isGhost) {
+                            setShowGhostModal(true);
+                        } else {
+                            setSelectedMember(m);
+                        }
                     }}
                 />
+
+                {/* Zoom To Toast */}
+                {selectedMember && (
+                    <View className="absolute bottom-4 left-4 right-4 z-30 flex-row items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                        <View className="flex-row items-center gap-3">
+                            {selectedMember.avatarUrl ? (
+                                <Image source={{ uri: selectedMember.avatarUrl }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+                            ) : (
+                                <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center">
+                                    <Ionicons name="person" size={18} color="#2563eb" />
+                                </View>
+                            )}
+                            <Text className="font-bold text-gray-900 dark:text-white">{selectedMember.nickname || 'Family Member'}</Text>
+                        </View>
+                        <View className="flex-row gap-2">
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setZoomTarget({ lat: selectedMember.lat, lng: selectedMember.lng });
+                                    setSelectedMember(null);
+                                    // Clear zoom target after a short delay so it can be triggered again
+                                    setTimeout(() => setZoomTarget(null), 500);
+                                }}
+                                className="bg-blue-500 px-4 py-2 rounded-lg"
+                            >
+                                <Text className="text-white font-bold">Zoom To</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setSelectedMember(null)}
+                                className="bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded-lg"
+                            >
+                                <Ionicons name="close" size={18} color="#6b7280" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )
 
                 {locationPermission !== 'granted' && (
                     <View className="absolute inset-0 flex items-center justify-center z-20">
@@ -454,17 +499,23 @@ export default function FleetScreen() {
             </View>
 
             {activeCode && (
-                <View className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 max-h-[40%]">
-                    <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full self-center mb-4" />
-                    <Text className="text-lg font-bold text-gray-900 dark:text-white mb-3 px-2">Family Members ({members.length})</Text>
+                <View className={`absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 rounded-t-3xl shadow-lg p-4 ${isMembersPanelCollapsed ? '' : 'max-h-[40%]'}`}>
+                    <TouchableOpacity onPress={() => setIsMembersPanelCollapsed(!isMembersPanelCollapsed)} className="items-center pb-2">
+                        <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mb-2" />
+                        <View className="flex-row items-center gap-2">
+                            <Text className="text-lg font-bold text-gray-900 dark:text-white">Family Members ({members.length})</Text>
+                            <Ionicons name={isMembersPanelCollapsed ? 'chevron-up' : 'chevron-down'} size={20} color="#6b7280" />
+                        </View>
+                    </TouchableOpacity>
+                    {!isMembersPanelCollapsed && (
                     <ScrollView>
                         {members.map(member => (
                             <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl">
                                 <View className="relative">
                                     {member.avatarUrl ? (
-                                        <Image source={{ uri: member.avatarUrl }} className="w-10 h-10 rounded-full" />
+                                        <Image source={{ uri: member.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                                     ) : (
-                                        <Image source={require('@/assets/images/marker-green-cross.png')} className="w-10 h-10" resizeMode="contain" />
+                                        <Image source={require('@/assets/images/marker-green-cross.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
                                     )}
                                     {member.isSos && <View className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white"><Ionicons name="warning" size={10} color="white" /></View>}
                                 </View>
@@ -499,6 +550,7 @@ export default function FleetScreen() {
                     ))}
                     {members.length === 0 && <Text className="text-center text-gray-500 py-4">Waiting for family to join...</Text>}
                     </ScrollView>
+                    )}
                 </View>
             )}
         </View>

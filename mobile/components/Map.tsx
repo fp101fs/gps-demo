@@ -43,9 +43,10 @@ interface MapProps {
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
   onMemberSelect?: (member: FleetMember) => void;
+  zoomTarget?: { lat: number; lng: number } | null;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], onMemberSelect }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], onMemberSelect, zoomTarget }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
   const getRelativeTime = (isoString?: string) => {
@@ -91,6 +92,17 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       }, 1000);
     }
   }, [currentPoint, isReplayMode, fleetMembers]);
+
+  // Handle zoom to specific target
+  useEffect(() => {
+    if (!mapRef.current || !zoomTarget) return;
+    mapRef.current.animateToRegion({
+      latitude: zoomTarget.lat,
+      longitude: zoomTarget.lng,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    }, 500);
+  }, [zoomTarget]);
 
   return (
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 relative">

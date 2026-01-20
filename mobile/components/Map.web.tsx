@@ -49,9 +49,10 @@ interface MapProps {
   safeZones?: SafeZone[];
   theme?: 'light' | 'dark';
   onMemberSelect?: (member: FleetMember) => void;
+  zoomTarget?: { lat: number; lng: number } | null;
 }
 
-export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', onMemberSelect }: MapProps) {
+export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], theme = 'light', onMemberSelect, zoomTarget }: MapProps) {
   const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -297,6 +298,12 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
       polylineRef.current = L.polyline(latLngs, { color: '#2563eb', weight: 4 }).addTo(mapRef.current);
     }
   }, [points]);
+
+  // Handle zoom to specific target
+  useEffect(() => {
+    if (!mapRef.current || !L || !zoomTarget) return;
+    mapRef.current.setView([zoomTarget.lat, zoomTarget.lng], 16);
+  }, [zoomTarget]);
 
   return (
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative">
