@@ -373,7 +373,7 @@ export default function FleetScreen() {
   };
 
   const shareInvite = async () => {
-      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`;
+      const url = `${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/?code=${activeCode}`;
       await Clipboard.setStringAsync(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -514,7 +514,7 @@ export default function FleetScreen() {
               <View className="bg-white dark:bg-gray-900 p-8 rounded-3xl items-center shadow-xl w-full max-w-sm">
                   <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">Invite to Circle</Text>
                   <Text className="text-gray-500 dark:text-gray-400 text-center mb-6 text-sm">Have your family scan this code or use the link below to join #{activeCode} instantly.</Text>
-                  <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/fleet?code=${activeCode}`} size={180} color="black" backgroundColor="white" /></View>
+                  <View className="bg-white p-4 rounded-2xl mb-6 shadow-sm border border-gray-100"><QRCode value={`${Platform.OS === 'web' ? window.location.origin : Linking.createURL('/')}/?code=${activeCode}`} size={180} color="black" backgroundColor="white" /></View>
                   <TouchableOpacity onPress={shareInvite} className="w-full bg-gray-100 dark:bg-gray-800 p-4 rounded-xl flex-row justify-between items-center mb-4"><Text className="text-blue-600 dark:text-blue-400 font-bold" numberOfLines={1}>{copied ? 'Link Copied!' : 'Copy Invite Link'}</Text><Ionicons name={copied ? "checkmark" : "copy-outline"} size={20} color="#2563eb" /></TouchableOpacity>
                   <Button onPress={() => setShowInviteModal(false)} className="w-full h-12"><Text className="text-white font-bold">Close</Text></Button>
               </View>
