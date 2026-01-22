@@ -282,13 +282,13 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (!trackId) {
+    if (!trackId || !fleetCode) {
         setAdHocMembers([]);
         setViewerCount(0);
         return;
     }
     const channel = supabase.channel(`track_updates_${trackId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${trackId}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${fleetCode}` }, (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
              if (!m.is_active || m.lat === null || m.lng === null) {
@@ -314,7 +314,7 @@ export default function HomeScreen() {
           if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString(), role: 'host' });
       });
     return () => { supabase.removeChannel(channel); };
-  }, [trackId]);
+  }, [trackId, fleetCode]);
 
   const fetchPastJourneys = async () => {
     if (!user) return;
