@@ -80,6 +80,14 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<'share' | 'tools'>('share');
   const [ghosts, setGhosts] = useState<any[]>([]);
   const [showGhostModal, setShowGhostModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Privacy Modal State
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -284,11 +292,16 @@ export default function HomeScreen() {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
              if (!m.is_active || m.lat === null || m.lng === null) {
-                 setAdHocMembers(prev => prev.filter(p => p.id !== m.id));
+                 setAdHocMembers(prev => {
+                     const exists = prev.find(p => p.id === m.id);
+                     if (exists) setToastMessage(`${exists.nickname || 'Member'} left the fleet`);
+                     return prev.filter(p => p.id !== m.id);
+                 });
                  return;
              }
              setAdHocMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
+                 if (!exists) setToastMessage(`${m.nickname || 'Member'} joined the fleet`);
                  if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname } : p);
                  return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname }];
              });
@@ -634,6 +647,13 @@ export default function HomeScreen() {
                             if (m.isGhost) setShowGhostModal(true);
                         }}
                     />
+                    {toastMessage && (
+                        <View className="absolute top-4 left-4 right-4 items-center z-50 pointer-events-none">
+                            <View className="bg-black/80 px-4 py-2 rounded-full shadow-lg backdrop-blur-sm">
+                                <Text className="text-white text-xs font-bold">{toastMessage}</Text>
+                            </View>
+                        </View>
+                    )}
                     {isTracking && (
                       <View className="absolute bottom-4 left-4 right-4 overflow-hidden rounded-xl bg-white/90 dark:bg-black/80 shadow-sm border border-gray-200 dark:border-gray-700 p-3">
                       <View className="flex-row justify-between items-start">

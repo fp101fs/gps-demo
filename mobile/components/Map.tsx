@@ -84,12 +84,14 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
     }
     
     if (currentPoint && !isReplayMode && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: currentPoint.lat,
-        longitude: currentPoint.lng,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 1000);
+      if (currentPoint.lat !== 0 && currentPoint.lng !== 0) {
+        mapRef.current.animateToRegion({
+          latitude: currentPoint.lat,
+          longitude: currentPoint.lng,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        }, 1000);
+      }
     }
   }, [currentPoint, isReplayMode, fleetMembers]);
 
