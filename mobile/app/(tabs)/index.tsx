@@ -201,7 +201,7 @@ export default function FleetScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from('tracks')
-        .select('id, lat, lng, avatar_url, user_id, is_sos, nickname, updated_at, battery_level, battery_state')
+        .select('id, lat, lng, avatar_url, user_id, is_sos, nickname, updated_at, created_at, battery_level, battery_state')
         .eq('party_code', activeCode)
         .eq('is_active', true)
         .not('lat', 'is', null)
@@ -216,7 +216,7 @@ export default function FleetScreen() {
             user_id: m.user_id,
             isSos: m.is_sos,
             nickname: m.nickname,
-            lastSeen: m.updated_at,
+            lastSeen: m.updated_at || m.created_at,
             battery_level: m.battery_level,
             battery_state: m.battery_state
         })));
@@ -232,8 +232,8 @@ export default function FleetScreen() {
              if (!m.is_active || m.lat === null || m.lng === null) { setMembers(prev => prev.filter(p => p.id !== m.id)); return; }
              setMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at, battery_level: m.battery_level, battery_state: m.battery_state } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at, battery_level: m.battery_level, battery_state: m.battery_state }];
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at || m.created_at, battery_level: m.battery_level, battery_state: m.battery_state } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at || m.created_at, battery_level: m.battery_level, battery_state: m.battery_state }];
              });
           }
     }).subscribe();
