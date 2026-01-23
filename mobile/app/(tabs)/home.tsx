@@ -343,7 +343,7 @@ export default function HomeScreen() {
           if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString(), role: 'host' });
       });
     return () => { supabase.removeChannel(channel); };
-  }, [trackId, fleetCode]);
+  }, [trackId, fleetCode, user]);
 
   const fetchPastJourneys = async () => {
     if (!user) return;
