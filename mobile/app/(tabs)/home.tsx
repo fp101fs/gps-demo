@@ -282,7 +282,7 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (!trackId || !fleetCode) {
+    if (!fleetCode) {
         setAdHocMembers([]);
         setViewerCount(0);
         return;
@@ -308,7 +308,7 @@ export default function HomeScreen() {
     };
     fetchFleetMembers();
 
-    const channel = supabase.channel(`track_updates_${trackId}`)
+    const channel = supabase.channel(`fleet_updates_${fleetCode}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${fleetCode}` }, (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
