@@ -44,9 +44,13 @@ export default function HomeScreen() {
   const [isTracking, setIsTracking] = useState(false);
 
   useEffect(() => {
-      if (params.action === 'start_tracking' && params.code && !isTracking && !isStarting) {
-          setFleetCode(params.code);
-          startTracking(true, params.code);
+      if (params.code) {
+          if (params.action === 'start_tracking' && !isTracking && !isStarting) {
+              setFleetCode(params.code);
+              startTracking(true, params.code);
+          } else if (params.action === 'view_fleet') {
+              setFleetCode(params.code);
+          }
       }
   }, [params.action, params.code]);
   const [currentPoint, setCurrentPoint] = useState<Point | undefined>();
