@@ -519,7 +519,8 @@ export default function HomeScreen() {
                 await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
                 await supabase.from('tracks').update({ 
                     lat: newPoint.lat, lng: newPoint.lng,
-                    battery_level: currentBatteryLevel, battery_state: currentBatteryState
+                    battery_level: currentBatteryLevel, battery_state: currentBatteryState,
+                    updated_at: new Date().toISOString()
                 }).eq('id', track.id);
               }
             );

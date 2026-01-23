@@ -297,6 +297,7 @@ export default function FleetScreen() {
                   lng: newLng,
                   battery_level: batteryLevel,
                   battery_state: batteryState,
+                  updated_at: new Date().toISOString(),
               }).eq('id', trackId);
 
               // Also insert point for history
