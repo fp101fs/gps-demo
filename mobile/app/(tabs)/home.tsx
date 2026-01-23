@@ -287,6 +287,27 @@ export default function HomeScreen() {
         setViewerCount(0);
         return;
     }
+
+    const fetchFleetMembers = async () => {
+        const { data } = await supabase
+            .from('tracks')
+            .select('id, lat, lng, avatar_url, is_sos, nickname')
+            .eq('party_code', fleetCode)
+            .eq('is_active', true);
+        
+        if (data) {
+            setAdHocMembers(data.map(m => ({
+                id: m.id,
+                lat: m.lat,
+                lng: m.lng,
+                avatarUrl: m.avatar_url,
+                isSos: m.is_sos,
+                nickname: m.nickname
+            })));
+        }
+    };
+    fetchFleetMembers();
+
     const channel = supabase.channel(`track_updates_${trackId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${fleetCode}` }, (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -294,14 +315,22 @@ export default function HomeScreen() {
              if (!m.is_active || m.lat === null || m.lng === null) {
                  setAdHocMembers(prev => {
                      const exists = prev.find(p => p.id === m.id);
-                     if (exists) setToastMessage(`${exists.nickname || 'Member'} left the fleet`);
+                     if (exists) {
+                         const msg = `${exists.nickname || 'Member'} left the fleet`;
+                         setToastMessage(msg);
+                         if (user) Notifications.send(user.id, 'Fleet Update', msg, 'info');
+                     }
                      return prev.filter(p => p.id !== m.id);
                  });
                  return;
              }
              setAdHocMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (!exists) setToastMessage(`${m.nickname || 'Member'} joined the fleet`);
+                 if (!exists) {
+                     const msg = `${m.nickname || 'Member'} joined the fleet`;
+                     setToastMessage(msg);
+                     if (user) Notifications.send(user.id, 'Fleet Update', msg, 'info');
+                 }
                  if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname } : p);
                  return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname }];
              });
