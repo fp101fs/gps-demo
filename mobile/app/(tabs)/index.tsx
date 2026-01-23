@@ -448,7 +448,7 @@ export default function FleetScreen() {
                             <View className="flex-row justify-between items-center">
                                 <View>
                                     <Text className="text-3xl font-black text-black dark:text-white">#{activeCode}</Text>
-                                    <Text className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{members.length} members online</Text>
+                                    <Text className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{members.filter(m => m.lastSeen && (Date.now() - new Date(m.lastSeen).getTime() < 300000)).length} members online</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg"><Ionicons name="person-add" size={40} color="#2563eb" /></TouchableOpacity>
                             </View>
@@ -508,7 +508,7 @@ export default function FleetScreen() {
                     {!isMembersPanelCollapsed && (
                     <ScrollView>
                         {members.map(member => (
-                            <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                            <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl" style={{ opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 300000)) ? 0.5 : 1 }}>
                                 <View className="relative">
                                     {member.avatarUrl ? (
                                         <Image source={{ uri: member.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />

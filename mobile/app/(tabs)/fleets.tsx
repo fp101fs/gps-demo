@@ -59,9 +59,8 @@ export default function FleetsScreen() {
   }, [user]);
 
   const handleFleetPress = (code: string) => {
-    // Navigate to home and load this fleet code
-    // We pass 'view_fleet' action to distinguish from starting a new track
-    router.push(`/(tabs)/home?action=view_fleet&code=${code}`);
+    // Navigate to Family tab (index) and load this fleet code
+    router.push(`/(tabs)/index?code=${code}`);
   };
 
   return (
@@ -74,6 +73,14 @@ export default function FleetsScreen() {
       {loading ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      ) : !user ? (
+        <View className="flex-1 justify-center items-center p-6">
+            <Ionicons name="log-in-outline" size={64} color="#9ca3af" />
+            <Text className="text-gray-500 mt-4 text-center text-lg">Sign in to view your fleets.</Text>
+            <TouchableOpacity onPress={() => router.replace('/')} className="mt-6 bg-blue-600 px-8 py-3 rounded-full">
+                <Text className="text-white font-bold">Sign In</Text>
+            </TouchableOpacity>
         </View>
       ) : (
         <FlatList

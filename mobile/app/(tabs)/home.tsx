@@ -295,7 +295,7 @@ export default function HomeScreen() {
     const fetchFleetMembers = async () => {
         const { data } = await supabase
             .from('tracks')
-            .select('id, lat, lng, avatar_url, is_sos, nickname')
+            .select('id, lat, lng, avatar_url, is_sos, nickname, updated_at')
             .eq('party_code', fleetCode)
             .eq('is_active', true);
         
@@ -306,7 +306,8 @@ export default function HomeScreen() {
                 lng: m.lng,
                 avatarUrl: m.avatar_url,
                 isSos: m.is_sos,
-                nickname: m.nickname
+                nickname: m.nickname,
+                lastSeen: m.updated_at
             })));
         }
     };
@@ -335,8 +336,8 @@ export default function HomeScreen() {
                      setToastMessage(msg);
                      if (user) Notifications.send(user.id, 'Fleet Update', msg, 'info');
                  }
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname } : p);
-                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname }];
+                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at } : p);
+                 return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at }];
              });
           }
       })

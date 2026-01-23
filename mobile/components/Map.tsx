@@ -161,7 +161,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                             borderColor: member.isSos ? '#ef4444' : 'white',
                             overflow: 'hidden',
                             backgroundColor: 'white',
-                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000)) ? 0.7 : 1
+                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 300000)) ? 0.4 : 1
                         }}>
                             <Image source={member.localAvatar} style={{ width: '100%', height: '100%' }} />
                         </View>
@@ -174,7 +174,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                             borderColor: member.isSos ? '#ef4444' : 'white',
                             overflow: 'hidden',
                             backgroundColor: 'white',
-                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 60000)) ? 0.7 : 1
+                            opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 300000)) ? 0.4 : 1
                         }}>
                             <Image source={{ uri: member.avatarUrl }} style={{ width: '100%', height: '100%' }} />
                         </View>
