@@ -60,7 +60,7 @@ export default function FleetsScreen() {
 
   const handleFleetPress = (code: string) => {
     // Navigate to Family tab (index) and load this fleet code
-    router.push(`/(tabs)/index?code=${code}`);
+    router.push({ pathname: '/(tabs)', params: { code } });
   };
 
   return (
