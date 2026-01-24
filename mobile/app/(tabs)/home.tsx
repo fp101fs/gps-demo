@@ -120,6 +120,7 @@ export default function HomeScreen() {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -497,16 +498,20 @@ export default function HomeScreen() {
             setIsTracking(true);
             startTimeRef.current = Date.now();
             setPoints([{ lat, lng, timestamp: Date.now()/1000 }]);
-            
+
             timerRef.current = setInterval(() => { if (startTimeRef.current) setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000)); }, 1000) as unknown as NodeJS.Timeout;
 
+            // Load location interval from settings (default 5s)
+            const savedInterval = await storage.getItem('location_interval');
+            const timeInterval = savedInterval ? parseInt(savedInterval, 10) : 5000;
+
             locationSubscription.current = await Location.watchPositionAsync(
-              { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+              { accuracy: Location.Accuracy.High, timeInterval, distanceInterval: 10 },
               async (loc) => {
                 const newPoint = { lat: loc.coords.latitude, lng: loc.coords.longitude, timestamp: loc.timestamp / 1000 };
                 setCurrentPoint(newPoint);
                 setPoints(prev => [...prev, newPoint]);
-                
+
                 let currentBatteryLevel = null;
                 let currentBatteryState = null;
                 try {
@@ -517,13 +522,20 @@ export default function HomeScreen() {
                 } catch (e) {}
 
                 await supabase.from('points').insert([{ track_id: track.id, lat: newPoint.lat, lng: newPoint.lng, timestamp: new Date().toISOString() }]);
-                await supabase.from('tracks').update({ 
+                await supabase.from('tracks').update({
                     lat: newPoint.lat, lng: newPoint.lng,
                     battery_level: currentBatteryLevel, battery_state: currentBatteryState,
                     updated_at: new Date().toISOString()
                 }).eq('id', track.id);
               }
             );
+
+            // Heartbeat: update updated_at every 60s to keep user "online" even when stationary
+            heartbeatRef.current = setInterval(async () => {
+                await supabase.from('tracks').update({
+                    updated_at: new Date().toISOString()
+                }).eq('id', track.id);
+            }, 60000);
         }
     } catch (globalErr) { setIsStarting(false); Alert.alert('Error', 'Unexpected error.'); }
   };
@@ -542,6 +554,7 @@ export default function HomeScreen() {
   const stopTracking = async () => {
     if (locationSubscription.current) { try { locationSubscription.current.remove(); } catch(e) {} locationSubscription.current = null; }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
     setIsTracking(false);
     if (trackId) {
         await supabase.from('tracks').update({ is_active: false, end_time: new Date().toISOString() }).eq('id', trackId);

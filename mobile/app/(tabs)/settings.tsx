@@ -20,6 +20,7 @@ export default function SettingsScreen() {
   const [proximityDistance, setProximityDistance] = useState('500');
   const [arrivalEnabled, setArrivalEnabled] = useState(false);
   const [arrivalDistance, setArrivalDistance] = useState('50');
+  const [locationInterval, setLocationInterval] = useState('5000');
 
   // Load settings from storage on mount
   useEffect(() => {
@@ -37,6 +38,9 @@ export default function SettingsScreen() {
       if (savedProxDistance) setProximityDistance(savedProxDistance);
       if (savedArrEnabled !== null) setArrivalEnabled(savedArrEnabled === 'true');
       if (savedArrDistance) setArrivalDistance(savedArrDistance);
+
+      const savedLocationInterval = await storage.getItem('location_interval');
+      if (savedLocationInterval) setLocationInterval(savedLocationInterval);
     })();
   }, []);
 
@@ -70,6 +74,18 @@ export default function SettingsScreen() {
     setArrivalDistance(value);
     await storage.setItem('arrival_distance', value);
   };
+
+  const saveLocationInterval = async (value: string) => {
+    setLocationInterval(value);
+    await storage.setItem('location_interval', value);
+  };
+
+  const intervalOptions = [
+    { label: '5s', value: '5000' },
+    { label: '10s', value: '10000' },
+    { label: '30s', value: '30000' },
+    { label: '1m', value: '60000' },
+  ];
 
   return (
     <ScrollView className="flex-1 bg-white dark:bg-black" style={{ paddingTop: insets.top }}>
@@ -168,6 +184,30 @@ export default function SettingsScreen() {
               <Text className="text-gray-600 dark:text-gray-400 text-sm">meters</Text>
             </View>
           )}
+        </View>
+
+        {/* Location Section */}
+        <Text className="text-sm font-bold text-gray-500 uppercase mb-3">Location</Text>
+
+        <View className="bg-gray-100 dark:bg-gray-800 p-4 rounded-xl mb-6">
+          <View className="flex-row items-center gap-2 mb-2">
+            <Ionicons name="location-outline" size={20} color="#2563eb" />
+            <Text className="text-gray-900 dark:text-white font-semibold">Location Check Interval</Text>
+          </View>
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mb-3">How often to update your location. Shorter intervals use more battery.</Text>
+          <View className="flex-row gap-2">
+            {intervalOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                onPress={() => saveLocationInterval(option.value)}
+                className={`flex-1 py-2 rounded-lg ${locationInterval === option.value ? 'bg-blue-600' : 'bg-white dark:bg-gray-700'}`}
+              >
+                <Text className={`text-center font-medium ${locationInterval === option.value ? 'text-white' : 'text-gray-700 dark:text-gray-200'}`}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Appearance Section */}

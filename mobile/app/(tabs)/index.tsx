@@ -62,6 +62,7 @@ export default function FleetScreen() {
 
   // Location watching ref for anonymous sharing
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -90,12 +91,16 @@ export default function FleetScreen() {
     })();
   }, []);
 
-  // Cleanup on unmount - stop location watching
+  // Cleanup on unmount - stop location watching and heartbeat
   useEffect(() => {
     return () => {
       if (locationWatchRef.current) {
         locationWatchRef.current.remove();
         locationWatchRef.current = null;
+      }
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
       }
     };
   }, []);
@@ -241,10 +246,14 @@ export default function FleetScreen() {
   }, [activeCode]);
 
   const handleExit = async () => {
-      // Stop location watching if active
+      // Stop location watching and heartbeat if active
       if (locationWatchRef.current) {
           locationWatchRef.current.remove();
           locationWatchRef.current = null;
+      }
+      if (heartbeatRef.current) {
+          clearInterval(heartbeatRef.current);
+          heartbeatRef.current = null;
       }
 
       // Deactivate track in Supabase
@@ -272,8 +281,12 @@ export default function FleetScreen() {
   };
 
   const startLocationWatching = async (trackId: string) => {
+      // Load location interval from settings (default 5s)
+      const savedInterval = await storage.getItem('location_interval');
+      const timeInterval = savedInterval ? parseInt(savedInterval, 10) : 5000;
+
       locationWatchRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+          { accuracy: Location.Accuracy.High, timeInterval, distanceInterval: 10 },
           async (loc) => {
               const newLat = loc.coords.latitude;
               const newLng = loc.coords.longitude;
@@ -309,6 +322,13 @@ export default function FleetScreen() {
               }]);
           }
       );
+
+      // Heartbeat: update updated_at every 60s to keep user "online" even when stationary
+      heartbeatRef.current = setInterval(async () => {
+          await supabase.from('tracks').update({
+              updated_at: new Date().toISOString()
+          }).eq('id', trackId);
+      }, 60000);
   };
 
   const startAnonymousSharing = async (location: { lat: number, lng: number }, existingCode?: string | null) => {
