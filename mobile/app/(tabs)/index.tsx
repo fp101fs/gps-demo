@@ -643,7 +643,7 @@ export default function FleetScreen() {
                     {!isMembersPanelCollapsed && (
                     <ScrollView>
                         {members.map(member => (
-                            <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl" style={{ opacity: (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 300000)) ? 0.5 : 1 }}>
+                            <View key={member.id} className="flex-row items-center p-3 mb-2 bg-gray-50 dark:bg-gray-800 rounded-xl" style={{ opacity: (myTrackId !== member.id && member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() > 300000)) ? 0.5 : 1 }}>
                                 <View className="relative">
                                     {member.avatarUrl ? (
                                         <Image source={{ uri: member.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
@@ -654,6 +654,7 @@ export default function FleetScreen() {
                                 </View>
                                 <View className="flex-1 ml-3">
                                     <View className="flex-row items-center gap-1">
+                                        <Text style={{ marginRight: 4 }}>{(myTrackId === member.id || (member.lastSeen && (Date.now() - new Date(member.lastSeen).getTime() < 300000))) ? '🟢' : '⚫'}</Text>
                                         <Text className="font-bold text-gray-900 dark:text-white">{member.nickname || 'Family Member'}</Text>
                                         {myTrackId === member.id ? (
                                             <Text className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded">(This Device)</Text>
