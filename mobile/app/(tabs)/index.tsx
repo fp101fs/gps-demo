@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, ScrollView, Image, Platform, Share } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Alert, TouchableOpacity, Modal, ScrollView, Image, Platform, Share, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
@@ -501,19 +501,32 @@ export default function FleetScreen() {
   };
 
   const handleEnableLocation = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status);
-      if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          const location = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          setCurrentLocation(location);
-          // Reposition ghosts around user's actual location
-          generateGhosts(location.lat, location.lng);
+      logger.location('Enable Location button pressed');
+      try {
+          logger.location('Requesting foreground permissions...');
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          logger.location('Permission result', { status });
+          setLocationPermission(status);
+          if (status === 'granted') {
+              logger.location('Getting current position...');
+              const loc = await Location.getCurrentPositionAsync({});
+              const location = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+              logger.location('Got position', location);
+              setCurrentLocation(location);
+              // Reposition ghosts around user's actual location
+              generateGhosts(location.lat, location.lng);
 
-          // Auto-start sharing for ALL users (pass activeCode if joining existing fleet)
-          await startAnonymousSharing(location, activeCode);
-      } else {
-          Alert.alert('Permission Required', 'Location access is needed to show your position on the map.');
+              // Auto-start sharing for ALL users (pass activeCode if joining existing fleet)
+              logger.location('Starting anonymous sharing with code', { activeCode });
+              await startAnonymousSharing(location, activeCode);
+              logger.success('Location enabled and sharing started');
+          } else {
+              logger.error('Location permission denied', { status });
+              Alert.alert('Permission Required', 'Location access is needed to show your position on the map.');
+          }
+      } catch (err: any) {
+          logger.error('handleEnableLocation failed', { error: err?.message || String(err) });
+          Alert.alert('Error', `Failed to enable location: ${err?.message || 'Unknown error'}`);
       }
   };
 
@@ -618,15 +631,33 @@ export default function FleetScreen() {
                 />
 
                 {locationPermission !== 'granted' && (
-                    <View className="absolute inset-0 flex items-center justify-center z-20">
-                        <TouchableOpacity
-                            onPress={handleEnableLocation}
-                            className="bg-blue-500 px-8 py-4 rounded-full shadow-lg"
-                            style={{ shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+                    <Pressable
+                        onPress={handleEnableLocation}
+                        style={({ pressed }) => ({
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 20,
+                        })}
+                    >
+                        <View
+                            style={{
+                                backgroundColor: '#3b82f6',
+                                paddingHorizontal: 32,
+                                paddingVertical: 16,
+                                borderRadius: 999,
+                                elevation: 8,
+                                shadowColor: '#3b82f6',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 8,
+                            }}
                         >
-                            <Text className="text-white font-bold text-lg">Enable Location Services</Text>
-                        </TouchableOpacity>
-                    </View>
+                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Enable Location Services</Text>
+                        </View>
+                    </Pressable>
                 )}
 
             </View>
