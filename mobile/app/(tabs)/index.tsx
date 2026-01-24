@@ -10,7 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
-import { storage, generateAnonymousId } from '@/lib/storage';
+import { storage, generateAnonymousId, getOrCreateDeviceId } from '@/lib/storage';
 import { generateFleetCode } from '@/lib/utils';
 import { calculateDistance, formatDistance } from '@/lib/LocationUtils';
 import * as Location from 'expo-location';
@@ -81,14 +81,29 @@ export default function FleetScreen() {
       // Check location permission
       const { status } = await Location.getForegroundPermissionsAsync();
       setLocationPermission(status);
+
+      const tid = await storage.getItem('current_track_id');
+      setMyTrackId(tid);
+
+      // Get persistent device ID for logging
+      const deviceId = await getOrCreateDeviceId();
+
+      // Log startup info
+      logger.fleet('App initialized', {
+        deviceId,
+        locationPermission: status,
+        isSignedIn: !!user,
+        userId: user?.id || 'anonymous',
+        savedFleetCode: saved,
+        currentTrackId: tid
+      });
+
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
         setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         // Reposition ghosts around user's actual location
         generateGhosts(loc.coords.latitude, loc.coords.longitude);
       }
-      const tid = await storage.getItem('current_track_id');
-      setMyTrackId(tid);
     })();
   }, []);
 
@@ -392,11 +407,46 @@ export default function FleetScreen() {
   };
 
   const startAnonymousSharing = async (location: { lat: number, lng: number }, existingCode?: string | null) => {
-      // Generate anonymous ID; use existing fleet code if joining, otherwise generate new
-      const anonId = generateAnonymousId();
+      // Get persistent device ID (same across sessions)
+      const deviceId = await getOrCreateDeviceId();
       const codeToUse = existingCode || generateFleetCode();
 
-      logger.fleet('Starting anonymous sharing', { code: codeToUse, isJoining: !!existingCode });
+      logger.fleet('Starting anonymous sharing', { code: codeToUse, deviceId, isJoining: !!existingCode });
+
+      // Check for existing track for this device in this fleet
+      const { data: existingTrack } = await supabase
+          .from('tracks')
+          .select('id')
+          .eq('user_id', deviceId)
+          .eq('party_code', codeToUse)
+          .limit(1)
+          .single();
+
+      if (existingTrack) {
+          // Reactivate existing track instead of creating duplicate
+          logger.fleet('Reactivating existing track for device', { code: codeToUse, trackId: existingTrack.id, deviceId });
+
+          await supabase.from('tracks').update({
+              is_active: true,
+              lat: location.lat,
+              lng: location.lng,
+              updated_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 60 * 60000).toISOString(),
+          }).eq('id', existingTrack.id);
+
+          await storage.setItem('current_track_id', existingTrack.id);
+          await storage.setItem('last_fleet_code', codeToUse);
+          setMyTrackId(existingTrack.id);
+
+          if (!existingCode) {
+              setFleetCode(codeToUse);
+              setActiveCode(codeToUse);
+          }
+
+          startLocationWatching(existingTrack.id);
+          logger.success('Reactivated existing track', { code: codeToUse, trackId: existingTrack.id });
+          return;
+      }
 
       // Capture battery data
       let batteryLevel: number | null = null;
@@ -412,10 +462,10 @@ export default function FleetScreen() {
           console.log('Battery info not available');
       }
 
-      // Create track in Supabase with anonymous user_id
+      // Create NEW track in Supabase with persistent device ID
       const { data: track, error } = await supabase.from('tracks').insert([{
           is_active: true,
-          user_id: anonId,
+          user_id: deviceId,
           party_code: codeToUse,
           lat: location.lat,
           lng: location.lng,
@@ -428,11 +478,11 @@ export default function FleetScreen() {
 
       if (error) {
           Alert.alert('Error', 'Could not start sharing.');
-          logger.error('Failed to create anonymous track', { code: codeToUse, error: error.message });
+          logger.error('Failed to create anonymous track', { code: codeToUse, deviceId, error: error.message });
           return;
       }
 
-      logger.success('Anonymous sharing started', { code: codeToUse, trackId: track.id });
+      logger.success('Created new track', { code: codeToUse, trackId: track.id, deviceId });
 
       // Store locally
       await storage.setItem('current_track_id', track.id);
@@ -586,7 +636,7 @@ export default function FleetScreen() {
                     <TouchableOpacity onPress={() => setIsMembersPanelCollapsed(!isMembersPanelCollapsed)} className="items-center pb-2">
                         <View className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mb-2" />
                         <View className="flex-row items-center gap-2">
-                            <Text className="text-lg font-bold text-gray-900 dark:text-white">Family Members ({members.length})</Text>
+                            <Text className="text-lg font-bold text-gray-900 dark:text-white">Fleet Members ({members.filter(m => m.lastSeen && (Date.now() - new Date(m.lastSeen).getTime() < 300000)).length} online / {members.length} total)</Text>
                             <Ionicons name={isMembersPanelCollapsed ? 'chevron-up' : 'chevron-down'} size={20} color="#6b7280" />
                         </View>
                     </TouchableOpacity>
