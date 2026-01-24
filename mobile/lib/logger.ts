@@ -1,7 +1,7 @@
-import { File, Paths } from 'expo-file-system/next';
+// Using legacy import to avoid deprecation warning while maintaining compatibility
+import * as FileSystem from 'expo-file-system/legacy';
 
-const LOG_FILE_PATH = Paths.document + '/app-logs.txt';
-const logFile = new File(LOG_FILE_PATH);
+const LOG_FILE = FileSystem.documentDirectory + 'app-logs.txt';
 
 export const logger = {
   async log(emoji: string, category: string, message: string, data?: any) {
@@ -12,8 +12,8 @@ export const logger = {
     console.log(line.trim());
 
     try {
-      const existing = logFile.exists ? logFile.text() : '';
-      logFile.write(existing + line);
+      const existing = await FileSystem.readAsStringAsync(LOG_FILE).catch(() => '');
+      await FileSystem.writeAsStringAsync(LOG_FILE, existing + line);
     } catch (e) {
       // Silently fail - logging should never break the app
     }
@@ -28,19 +28,19 @@ export const logger = {
   success: (msg: string, data?: any) => logger.log('✅', 'SUCCESS', msg, data),
 
   // Get log file path for reading
-  getLogPath: () => LOG_FILE_PATH,
+  getLogPath: () => LOG_FILE,
 
   // Clear logs
-  clear() {
+  async clear() {
     try {
-      logFile.write('');
+      await FileSystem.writeAsStringAsync(LOG_FILE, '');
     } catch (e) {}
   },
 
   // Read all logs
-  readAll(): string {
+  async readAll(): Promise<string> {
     try {
-      return logFile.exists ? logFile.text() : '';
+      return await FileSystem.readAsStringAsync(LOG_FILE);
     } catch (e) {
       return '';
     }
