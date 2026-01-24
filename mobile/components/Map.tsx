@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { View, Image, Text, TouchableOpacity, Animated } from 'react-native';
-import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT, MarkerAnimated } from 'react-native-maps';
-import { AnimatedRegion } from 'react-native-maps';
+import { View, Image, Text, TouchableOpacity } from 'react-native';
+import MapView, { Marker, Polyline, Circle, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { calculateDistance, formatDistance } from '../lib/LocationUtils';
 
@@ -50,9 +49,9 @@ interface MapProps {
 export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nickname, isSos, fleetMembers = [], safeZones = [], onMemberSelect, zoomTarget }: MapProps) {
   const mapRef = useRef<MapView>(null);
 
-  // Track animated regions for smooth marker transitions
-  const animatedRegions = useRef<Map<string, AnimatedRegion>>(new Map());
+  // Track marker refs and previous positions for smooth animations
   const markerRefs = useRef<Map<string, any>>(new Map());
+  const prevPositions = useRef<Map<string, { lat: number; lng: number }>>(new Map());
 
   const getRelativeTime = (isoString?: string) => {
       if (!isoString) return '';
@@ -114,54 +113,32 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
   // Animate fleet member markers smoothly when positions change
   useEffect(() => {
     fleetMembers.forEach(member => {
-      let animatedRegion = animatedRegions.current.get(member.id);
+      const markerRef = markerRefs.current.get(member.id);
+      const prevPos = prevPositions.current.get(member.id);
 
-      if (!animatedRegion) {
-        // First time seeing this member - create animated region at current position
-        animatedRegion = new AnimatedRegion({
-          latitude: member.lat,
-          longitude: member.lng,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        });
-        animatedRegions.current.set(member.id, animatedRegion);
-      } else {
-        // Animate to new position over 500ms
-        animatedRegion.timing({
-          latitude: member.lat,
-          longitude: member.lng,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-          duration: 500,
-          useNativeDriver: false,
-        }).start();
+      // If we have a marker ref and previous position, animate to new location
+      if (markerRef && prevPos) {
+        if (prevPos.lat !== member.lat || prevPos.lng !== member.lng) {
+          markerRef.animateMarkerToCoordinate(
+            { latitude: member.lat, longitude: member.lng },
+            500 // duration in ms
+          );
+        }
       }
+
+      // Store current position for next comparison
+      prevPositions.current.set(member.id, { lat: member.lat, lng: member.lng });
     });
 
-    // Cleanup: remove animated regions for members that left
+    // Cleanup: remove refs for members that left
     const currentIds = new Set(fleetMembers.map(m => m.id));
-    animatedRegions.current.forEach((_, id) => {
+    prevPositions.current.forEach((_, id) => {
       if (!currentIds.has(id)) {
-        animatedRegions.current.delete(id);
+        prevPositions.current.delete(id);
         markerRefs.current.delete(id);
       }
     });
   }, [fleetMembers]);
-
-  // Helper to get or create animated region for a member
-  const getAnimatedRegion = (member: FleetMember): AnimatedRegion => {
-    let region = animatedRegions.current.get(member.id);
-    if (!region) {
-      region = new AnimatedRegion({
-        latitude: member.lat,
-        longitude: member.lng,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      });
-      animatedRegions.current.set(member.id, region);
-    }
-    return region;
-  };
 
   return (
     <View className="h-full w-full rounded-xl overflow-hidden border border-gray-200 relative">
@@ -196,10 +173,10 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
         )}
         
         {fleetMembers.map(member => (
-            <MarkerAnimated
+            <Marker
                 key={member.id}
                 ref={(ref) => { if (ref) markerRefs.current.set(member.id, ref); }}
-                coordinate={getAnimatedRegion(member)}
+                coordinate={{ latitude: member.lat, longitude: member.lng }}
                 title={member.nickname || 'Family Member'}
                 onPress={() => onMemberSelect?.(member)}
                 opacity={member.isGhost ? 0.6 : 1}
@@ -260,7 +237,7 @@ export default function Map({ currentPoint, points, isReplayMode, avatarUrl, nic
                         </View>
                     )}
                 </View>
-            </MarkerAnimated>
+            </Marker>
         ))}
 
         {currentPoint && (
