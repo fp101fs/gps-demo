@@ -222,7 +222,7 @@ export default function FleetScreen() {
         .not('lng', 'is', null);
 
       if (!error && data) {
-        setMembers(data.map(m => ({
+        const mappedMembers = data.map(m => ({
             id: m.id,
             lat: m.lat,
             lng: m.lng,
@@ -233,7 +233,33 @@ export default function FleetScreen() {
             lastSeen: m.updated_at || m.created_at,
             battery_level: m.battery_level,
             battery_state: m.battery_state
-        })));
+        }));
+        setMembers(mappedMembers);
+
+        // Log detailed fleet info
+        const now = Date.now();
+        const onlineThreshold = 300000; // 5 minutes
+        const membersOnline = mappedMembers.filter(m => m.lastSeen && (now - new Date(m.lastSeen).getTime() < onlineThreshold)).length;
+        const memberDetails = mappedMembers.map(m => {
+            const lastSeenMs = m.lastSeen ? now - new Date(m.lastSeen).getTime() : null;
+            const lastSeenStr = lastSeenMs !== null ? (lastSeenMs < 60000 ? 'just now' : `${Math.floor(lastSeenMs / 60000)}m ago`) : 'unknown';
+            const isOnline = lastSeenMs !== null && lastSeenMs < onlineThreshold;
+            return {
+                nickname: m.nickname || 'Anonymous',
+                status: isOnline ? '🟢 online' : '⚫ offline',
+                lastSeen: lastSeenStr,
+                battery: m.battery_level !== undefined ? `${m.battery_level}%` : 'N/A',
+                isSos: m.isSos ? '🚨 SOS' : null
+            };
+        });
+        logger.fleet('Fleet loaded', {
+            code: activeCode,
+            totalMembers: mappedMembers.length,
+            membersOnline,
+            members: memberDetails
+        });
+      } else if (error) {
+        logger.error('Failed to fetch fleet', { code: activeCode, error: error.message });
       }
       setLoading(false);
     };
@@ -244,10 +270,23 @@ export default function FleetScreen() {
     const channel = supabase.channel(`fleet_${activeCode}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${activeCode}` }, (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
-             if (!m.is_active || m.lat === null || m.lng === null) { setMembers(prev => prev.filter(p => p.id !== m.id)); return; }
+             if (!m.is_active || m.lat === null || m.lng === null) {
+                 logger.realtime('Member left or became inactive', { code: activeCode, memberId: m.id, nickname: m.nickname });
+                 setMembers(prev => prev.filter(p => p.id !== m.id));
+                 return;
+             }
              setMembers(prev => {
                  const exists = prev.find(p => p.id === m.id);
-                 if (exists) return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at || m.created_at, battery_level: m.battery_level, battery_state: m.battery_state } : p);
+                 if (exists) {
+                     // Position update
+                     return prev.map(p => p.id === m.id ? { ...p, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at || m.created_at, battery_level: m.battery_level, battery_state: m.battery_state } : p);
+                 }
+                 // New member joined
+                 logger.realtime('New member joined fleet', {
+                     code: activeCode,
+                     nickname: m.nickname || 'Anonymous',
+                     battery: m.battery_level !== undefined ? `${m.battery_level}%` : 'N/A'
+                 });
                  return [...prev, { id: m.id, lat: m.lat, lng: m.lng, avatarUrl: m.avatar_url, user_id: m.user_id, isSos: m.is_sos, nickname: m.nickname, lastSeen: m.updated_at || m.created_at, battery_level: m.battery_level, battery_state: m.battery_state }];
              });
           }
