@@ -583,7 +583,7 @@ export default function FleetScreen() {
                             <View className="flex-row justify-between items-center">
                                 <View>
                                     <Text className="text-3xl font-black text-black dark:text-white">#{activeCode}</Text>
-                                    <Text className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{members.filter(m => m.lastSeen && (Date.now() - new Date(m.lastSeen).getTime() < 300000)).length} members online</Text>
+                                    <Text className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{members.filter(m => m.id === myTrackId || (m.lastSeen && (Date.now() - new Date(m.lastSeen).getTime() < 300000))).length} members online</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => setShowInviteModal(true)} className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg"><Ionicons name="person-add" size={40} color="#2563eb" /></TouchableOpacity>
                             </View>
