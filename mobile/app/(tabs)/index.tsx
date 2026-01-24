@@ -17,6 +17,7 @@ import * as Location from 'expo-location';
 import * as WebBrowser from 'expo-web-browser';
 import * as Battery from 'expo-battery';
 import { useAuth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 interface FleetMember {
   id: string;
@@ -118,6 +119,7 @@ export default function FleetScreen() {
         const initialCode = inviteCode || saved;
 
         if (initialCode) {
+            logger.fleet('Auto-joining fleet from storage', { code: initialCode, source: inviteCode ? 'invite' : 'saved' });
             setFleetCode(initialCode);
             connectToCircle(initialCode);
         }
@@ -173,10 +175,12 @@ export default function FleetScreen() {
 
   const connectToCircle = async (code: string) => {
       if (!code) return;
+      logger.fleet('Connecting to circle...', { code });
       setLoading(true);
       try {
           const { data } = await supabase.from('tracks').select('password').eq('party_code', code).eq('is_active', true).not('password', 'is', null).limit(1);
           if (data && data.length > 0) {
+              logger.fleet('Password required for fleet', { code });
               setCorrectPassword(data[0].password);
               setNeedsPassword(true);
               setLoading(false);
@@ -184,7 +188,10 @@ export default function FleetScreen() {
           }
           setActiveCode(code);
           await storage.setItem('last_fleet_code', code);
-      } catch (e) {}
+          logger.success('Joined fleet', { code });
+      } catch (e) {
+          logger.error('Failed to connect to fleet', { code, error: String(e) });
+      }
       setLoading(false);
   };
 
@@ -194,8 +201,10 @@ export default function FleetScreen() {
           setActiveCode(fleetCode);
           await storage.setItem('last_fleet_code', fleetCode);
           setPasswordError(false);
+          logger.success('Password verified, joined fleet', { code: fleetCode });
       } else {
           setPasswordError(true);
+          logger.error('Invalid password for fleet', { code: fleetCode });
       }
   };
 
@@ -231,6 +240,7 @@ export default function FleetScreen() {
 
     fetchFleet();
 
+    logger.realtime('Subscribing to fleet updates', { code: activeCode });
     const channel = supabase.channel(`fleet_${activeCode}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tracks', filter: `party_code=eq.${activeCode}` }, (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
              const m = payload.new;
@@ -242,14 +252,20 @@ export default function FleetScreen() {
              });
           }
     }).subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+        logger.realtime('Unsubscribing from fleet updates', { code: activeCode });
+        supabase.removeChannel(channel);
+    };
   }, [activeCode]);
 
   const handleExit = async () => {
+      logger.fleet('Leaving fleet...', { code: activeCode, trackId: myTrackId });
+
       // Stop location watching and heartbeat if active
       if (locationWatchRef.current) {
           locationWatchRef.current.remove();
           locationWatchRef.current = null;
+          logger.location('Stopped location watching');
       }
       if (heartbeatRef.current) {
           clearInterval(heartbeatRef.current);
@@ -262,11 +278,14 @@ export default function FleetScreen() {
       }
 
       // Clear local state
+      const exitedCode = activeCode;
       setActiveCode(null);
       setMembers([]);
       setMyTrackId(null);
       await storage.removeItem('last_fleet_code');
       await storage.removeItem('current_track_id');
+
+      logger.success('Left fleet', { code: exitedCode });
   };
 
   const handleCreateFleet = async () => {
@@ -284,6 +303,8 @@ export default function FleetScreen() {
       // Load location interval from settings (default 5s)
       const savedInterval = await storage.getItem('location_interval');
       const timeInterval = savedInterval ? parseInt(savedInterval, 10) : 5000;
+
+      logger.location('Starting location watching', { trackId, interval: timeInterval });
 
       locationWatchRef.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval, distanceInterval: 10 },
@@ -336,6 +357,8 @@ export default function FleetScreen() {
       const anonId = generateAnonymousId();
       const codeToUse = existingCode || generateFleetCode();
 
+      logger.fleet('Starting anonymous sharing', { code: codeToUse, isJoining: !!existingCode });
+
       // Capture battery data
       let batteryLevel: number | null = null;
       let batteryState: string | null = null;
@@ -366,9 +389,11 @@ export default function FleetScreen() {
 
       if (error) {
           Alert.alert('Error', 'Could not start sharing.');
-          console.error('Track creation error:', error);
+          logger.error('Failed to create anonymous track', { code: codeToUse, error: error.message });
           return;
       }
+
+      logger.success('Anonymous sharing started', { code: codeToUse, trackId: track.id });
 
       // Store locally
       await storage.setItem('current_track_id', track.id);

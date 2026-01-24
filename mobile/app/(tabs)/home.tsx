@@ -18,6 +18,7 @@ import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { storage } from '@/lib/storage';
+import { logger } from '@/lib/logger';
 
 interface Journey {
   id: string;
@@ -397,6 +398,7 @@ export default function HomeScreen() {
   const startTracking = async (useDefaults = false, overrideCode?: string) => {
     if (isStarting) return;
     setIsStarting(true);
+    logger.location('Starting tracking...', { useDefaults, overrideCode });
     try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         setLocationPermission(status);
@@ -469,9 +471,14 @@ export default function HomeScreen() {
             battery_level: batteryLevel, battery_state: batteryState
         }]).select().single();
 
-        if (error) { setIsStarting(false); return Alert.alert('Error', 'Could not create session.'); }
+        if (error) {
+            logger.error('Failed to create track', { error: error.message });
+            setIsStarting(false);
+            return Alert.alert('Error', 'Could not create session.');
+        }
         await supabase.from('points').insert([{ track_id: track.id, lat: lat, lng: lng, timestamp: new Date().toISOString() }]);
 
+        logger.success('Tracking started', { trackId: track.id, fleetCode: currentFleetCode, type });
         setTrackId(track.id);
         await storage.setItem('current_track_id', track.id);
         if (currentFleetCode) {
@@ -543,15 +550,25 @@ export default function HomeScreen() {
   const toggleSos = async () => {
       if (!trackId) return;
       const newSosState = !isSos;
+      logger.fleet('Toggling SOS', { trackId, newState: newSosState });
       try {
           const { error } = await supabase.from('tracks').update({ is_sos: newSosState }).eq('id', trackId);
           if (error) throw error;
           setIsSos(newSosState);
-          if (newSosState) Alert.alert('SOS Triggered', 'Your family circle has been notified.');
-      } catch (e) { Alert.alert('Error', 'Failed to update SOS.'); }
+          if (newSosState) {
+              logger.success('SOS triggered', { trackId });
+              Alert.alert('SOS Triggered', 'Your family circle has been notified.');
+          } else {
+              logger.success('SOS cancelled', { trackId });
+          }
+      } catch (e) {
+          logger.error('Failed to toggle SOS', { trackId, error: String(e) });
+          Alert.alert('Error', 'Failed to update SOS.');
+      }
   };
 
   const stopTracking = async () => {
+    logger.location('Stopping tracking...', { trackId });
     if (locationSubscription.current) { try { locationSubscription.current.remove(); } catch(e) {} locationSubscription.current = null; }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
@@ -560,6 +577,7 @@ export default function HomeScreen() {
         await supabase.from('tracks').update({ is_active: false, end_time: new Date().toISOString() }).eq('id', trackId);
         await storage.removeItem('current_track_id');
     }
+    logger.success('Tracking stopped', { trackId });
     Alert.alert('Stopped', 'Journey saved.');
     fetchPastJourneys();
   };
